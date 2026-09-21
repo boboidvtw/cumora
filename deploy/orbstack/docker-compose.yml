@@ -1,0 +1,93 @@
+# Cumora self-hosted on OrbStack (Docker Compose) — Traditional Chinese build.
+#
+# Brain: BYOA only. Agents run on this Mac through the `cumora agent computer`
+# daemon (Claude Code / Codex); nothing here schedules cloud agent Pods, so no
+# Kubernetes is needed.
+#
+#   cp .env.example .env      # fill in the GitHub OAuth app, then:
+#   ./up.sh                   # build, migrate, start
+#
+# Everything listens on 127.0.0.1 only. Data lives in named volumes
+# (cumora_pgdata, cumora_redisdata, cumora_uploads) and survives `down`;
+# only `down -v` deletes it.
+name: cumora
+
+x-server-env: &server-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://cumora:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/cumora
+  REDIS_URL: redis://redis:6379
+  # Same origin serves the SPA (/), the JSON API (/api) and the runtime API (/runtime).
+  CUMORA_PUBLIC_ORIGIN: ${CUMORA_PUBLIC_ORIGIN:-http://localhost:5181}
+  CUMORA_AUTH_DONE_URL: ${CUMORA_PUBLIC_ORIGIN:-http://localhost:5181}/
+  CUMORA_AUTH_RETURN_ALLOWLIST: ${CUMORA_PUBLIC_ORIGIN:-http://localhost:5181}/
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cumora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: cumora
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cumora -d cumora"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot schema migration. The server only verifies the migration ledger
+  # at boot, so this has to finish first (same contract as the prod pre-deploy Job).
+  migrate:
+    image: cumora-server:zh-tw
+    build:
+      context: ../..
+      dockerfile: server/docker/cumora-server.Dockerfile
+      args:
+        VITE_CUMORA_DEFAULT_LOCALE: ${CUMORA_DEFAULT_LOCALE:-zh-TW}
+    command: ["npm", "run", "migrate"]
+    env_file: .env
+    environment: *server-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  server:
+    image: cumora-server:zh-tw
+    restart: unless-stopped
+    env_file: .env
+    environment: *server-env
+    ports:
+      - "127.0.0.1:${CUMORA_PORT:-5181}:5181"
+    volumes:
+      - uploads:/app/server/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5181/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:

@@ -50,9 +50,12 @@ WORKDIR /app
 ARG VITE_CUMORA_API_BASE=""
 ARG VITE_PUBLIC_POSTHOG_KEY=""
 ARG VITE_PUBLIC_POSTHOG_HOST=""
+# First-run UI locale for this build (e.g. zh-TW); empty = follow the browser.
+ARG VITE_CUMORA_DEFAULT_LOCALE=""
 ENV VITE_CUMORA_API_BASE=${VITE_CUMORA_API_BASE}
 ENV VITE_PUBLIC_POSTHOG_KEY=${VITE_PUBLIC_POSTHOG_KEY}
 ENV VITE_PUBLIC_POSTHOG_HOST=${VITE_PUBLIC_POSTHOG_HOST}
+ENV VITE_CUMORA_DEFAULT_LOCALE=${VITE_CUMORA_DEFAULT_LOCALE}
 COPY package.json package-lock.json ./
 # --ignore-scripts: electron-icon-builder transitively pulls
 # phantomjs-prebuilt, whose postinstall extracts a bz2 tarball — but
