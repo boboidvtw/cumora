@@ -3007,7 +3007,7 @@ api.post('/agents', async (req, res) => {
       `${data.systemPrompt}\n\n` +
       `## Principles\n\n` +
       `- Speak like a real person, not like a tech blog.\n` +
-      `- Match the user's language.\n` +
+      `- Match the user's language and script (繁體中文 → 繁體中文, 简体 → 简体).\n` +
       `- Save things worth remembering — they outlive any single conversation.\n\n` +
       `_This file is your voice + values. Edit it freely to evolve who you are._\n`
     await pool.query(

@@ -24,8 +24,9 @@
 import { create } from 'zustand'
 import { en } from '@/locales/en'
 import { zhCN } from '@/locales/zh-CN'
+import { zhTW } from '@/locales/zh-TW'
 
-export type Locale = 'en' | 'zh-CN'
+export type Locale = 'en' | 'zh-CN' | 'zh-TW'
 export type MessageKey = keyof typeof en
 
 /** Order here is the order the language picker renders. `label` is
@@ -33,36 +34,60 @@ export type MessageKey = keyof typeof en
  *  Chinese scans for 简体中文, not for "Chinese (Simplified)". */
 export const LOCALES: Array<{ code: Locale; label: string; english: string }> = [
   { code: 'en', label: 'English', english: 'English' },
+  { code: 'zh-TW', label: '繁體中文', english: 'Chinese (Traditional)' },
   { code: 'zh-CN', label: '简体中文', english: 'Chinese (Simplified)' },
 ]
 
 const DICTS: Record<Locale, Partial<Record<MessageKey, string>>> = {
   en,
   'zh-CN': zhCN,
+  'zh-TW': zhTW,
 }
 
 const STORAGE_KEY = 'cumora.locale'
 
 function isLocale(v: string | null): v is Locale {
-  return v === 'en' || v === 'zh-CN'
+  return v === 'en' || v === 'zh-CN' || v === 'zh-TW'
 }
 
-/** First run: no stored choice, so take the browser's. `zh`, `zh-Hans`,
- *  `zh-CN`, `zh-SG` all mean "this person reads Chinese" for our purposes
- *  — we only ship Simplified, so anything Chinese-ish lands there rather
- *  than falling through to English. Traditional-script users get
- *  Simplified until a zh-TW dictionary exists; a wrong-script UI they can
- *  switch is still better than an English one they can't read. */
-function detectLocale(): Locale {
-  if (typeof navigator === 'undefined') return 'en'
-  const tags = [navigator.language, ...(navigator.languages ?? [])]
+/** Traditional-script Chinese tags: an explicit `Hant` script subtag, or a
+ *  region whose everyday script is Traditional (TW / HK / MO). */
+function isTraditionalChinese(lowerTag: string): boolean {
+  return /^zh-(hant|tw|hk|mo)\b/.test(lowerTag)
+}
+
+/** A deployment-wide first-run default, baked at build time
+ *  (`VITE_CUMORA_DEFAULT_LOCALE=zh-TW`). Self-hosters serving one language
+ *  community set it so a fresh device opens in that language even when the
+ *  browser reports something else. A stored choice still wins, so anyone
+ *  can switch from the picker. */
+function buildDefaultLocale(): Locale | null {
+  const raw = import.meta.env?.VITE_CUMORA_DEFAULT_LOCALE ?? null
+  return isLocale(raw) ? raw : null
+}
+
+/** Map the browser's language tags, in preference order, to a locale.
+ *  Traditional tags (`zh-TW`, `zh-Hant*`, `zh-HK`, `zh-MO`) land on
+ *  Traditional; every other `zh*` tag (`zh`, `zh-Hans`, `zh-CN`, `zh-SG`)
+ *  lands on Simplified rather than falling through to English. */
+export function localeFromTags(tags: ReadonlyArray<string | undefined>): Locale {
   for (const tag of tags) {
     if (!tag) continue
     const lower = tag.toLowerCase()
+    if (isTraditionalChinese(lower)) return 'zh-TW'
     if (lower.startsWith('zh')) return 'zh-CN'
     if (lower.startsWith('en')) return 'en'
   }
   return 'en'
+}
+
+/** First run: no stored choice, so take the build default, else the
+ *  browser's languages. */
+function detectLocale(): Locale {
+  const buildDefault = buildDefaultLocale()
+  if (buildDefault) return buildDefault
+  if (typeof navigator === 'undefined') return 'en'
+  return localeFromTags([navigator.language, ...(navigator.languages ?? [])])
 }
 
 function readInitialLocale(): Locale {

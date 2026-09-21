@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { cn } from '@/lib/utils'
-import { useT } from '@/lib/i18n'
+import { useT, type MessageKey } from '@/lib/i18n'
 
 /**
  * Inline poll composer. Floats above the chat input when the user types
@@ -23,12 +23,12 @@ const MIN_OPTIONS = 2
 const MAX_OPTIONS = 10
 
 type ExpireChoice = 'none' | '1h' | '6h' | '1d' | '3d'
-const EXPIRE_LABELS: Record<ExpireChoice, string> = {
-  none: '不限',
-  '1h': '1 小时',
-  '6h': '6 小时',
-  '1d': '1 天',
-  '3d': '3 天',
+const EXPIRE_LABELS: Record<ExpireChoice, MessageKey> = {
+  none: 'poll.expireNone',
+  '1h': 'poll.expire1h',
+  '6h': 'poll.expire6h',
+  '1d': 'poll.expire1d',
+  '3d': 'poll.expire3d',
 }
 function expireToMinutes(c: ExpireChoice): number | null {
   switch (c) {
@@ -188,7 +188,7 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
               value={opt}
               onChange={(e) => setOptionAt(i, e.target.value)}
               onKeyDown={(e) => onOptionKey(e, i)}
-              placeholder={`选项 ${i + 1}`}
+              placeholder={t('poll.optionPh', { n: i + 1 })}
               maxLength={120}
               className="flex-1 px-1 py-0.5 text-[13.5px] text-ink-800 placeholder-ink-300 bg-transparent outline-none"
             />
@@ -208,7 +208,7 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
             onClick={addOption}
             className="self-start ml-2 mt-0.5 text-[12px] text-skype-deep hover:underline tabular-nums"
           >
-            + 添加选项
+            {t('poll.addOption')}
           </button>
         )}
       </div>
@@ -225,7 +225,7 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
                 ? 'bg-cloud text-ink-900 shadow-[0_1px_3px_rgba(15,23,42,0.10),0_0_0_1px_rgba(15,23,42,0.05)]'
                 : 'text-ink-400 hover:text-ink-700',
             )}
-          >单选</button>
+          >{t('poll.single')}</button>
           <button
             type="button"
             onClick={() => setMode('multi')}
@@ -235,11 +235,11 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
                 ? 'bg-cloud text-ink-900 shadow-[0_1px_3px_rgba(15,23,42,0.10),0_0_0_1px_rgba(15,23,42,0.05)]'
                 : 'text-ink-400 hover:text-ink-700',
             )}
-          >多选</button>
+          >{t('poll.multi')}</button>
         </div>
 
         <span className="text-ink-300">·</span>
-        <span>过期</span>
+        <span>{t('poll.expires')}</span>
         <div className="inline-flex flex-wrap gap-1">
           {(['none', '1h', '6h', '1d', '3d'] as ExpireChoice[]).map((c) => (
             <button
@@ -252,7 +252,7 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
                   ? 'bg-sky2-100 text-skype-deep'
                   : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
               )}
-            >{EXPIRE_LABELS[c]}</button>
+            >{t(EXPIRE_LABELS[c])}</button>
           ))}
         </div>
 
@@ -262,7 +262,7 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
             type="button"
             onClick={onCancel}
             className="px-2.5 py-1 rounded-full text-ink-500 hover:bg-ink-50 transition"
-          >取消</button>
+          >{t('poll.cancel')}</button>
           <button
             type="button"
             onClick={submit}
@@ -272,7 +272,7 @@ export function PollComposer({ onSubmitted, onCancel, conversationId }: Props) {
               canSubmit ? 'bg-skype-deep hover:brightness-105' : 'bg-ink-200 cursor-not-allowed',
             )}
           >
-            {submitting ? '发布中…' : '发起投票'}
+            {submitting ? t('poll.submitting') : t('poll.submit')}
           </button>
         </div>
       </div>
