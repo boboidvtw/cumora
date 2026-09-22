@@ -1,0 +1,69 @@
+#!/bin/sh
+# ACP endpoint for a Hermes agent, running inside a container.
+#
+# Cumora's hermes adapter spawns this script and speaks ACP to it over stdio;
+# the script is just a pipe into `hermes-acp` in the container, so the engine
+# process never runs on the host. Point the daemon at it with
+# CUMORA_HERMES_ACP_BIN=<this file>.
+#
+# What the container can reach, and nothing else:
+#   - this agent's home            (its AGENTS.md, skills, notes — the ACP cwd)
+#   - this agent's IPC directory   (how the `cumora` shim reaches the daemon)
+#   - its own /opt/data volume     (Hermes state, one per agent)
+#   - the host's LM Studio         (the model; see config.yaml below)
+# Not the rest of the Mac, not ~/.cumora/computer.json (the device token), not
+# the operator's own ~/.hermes credentials.
+#
+# stdout is the JSON-RPC channel: nothing here may print to it. The image's
+# usual entrypoint runs an s6 supervision tree that logs to stdout, so we
+# bypass it and exec hermes-acp directly — its own logs go to stderr, which
+# the daemon captures.
+set -eu
+
+image=${CUMORA_HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+model=${CUMORA_HERMES_MODEL:-qwen3.8-27b}
+model_base_url=${CUMORA_HERMES_BASE_URL:-http://host.docker.internal:1234/v1}
+context_length=${CUMORA_HERMES_CONTEXT:-65536}
+
+agent_id=${CUMORA_AGENT_ID:-}
+ipc_dir=${CUMORA_AGENT_IPC_DIR:-}
+if [ -z "$agent_id" ] || [ -z "$ipc_dir" ]; then
+  echo "hermes-acp-container: CUMORA_AGENT_ID and CUMORA_AGENT_IPC_DIR must be set (the daemon sets both)" >&2
+  exit 64
+fi
+
+home_dir="$HOME/.cumora/agents/$agent_id"
+mkdir -p "$home_dir" "$ipc_dir"
+volume="cumora-hermes-$agent_id"
+
+# First run for this agent: create its volume and write the Hermes config that
+# points at the host's LM Studio. Kept out of the image so the model can be
+# changed without a rebuild, and out of the agent home so the model config is
+# not something the agent itself can rewrite mid-turn.
+if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+  docker volume create "$volume" >/dev/null
+  printf '%s\n' \
+    "# Written by hermes-acp-container. Model runs on the host in LM Studio." \
+    "model:" \
+    "  default: $model" \
+    "  provider: lmstudio" \
+    "  base_url: $model_base_url" \
+    "  context_length: $context_length" \
+    "database:" \
+    "  journal_mode: wal" \
+  | docker run --rm -i -v "$volume:/opt/data" --entrypoint /bin/sh "$image" \
+      -c 'cat > /opt/data/config.yaml && chown 10000:10000 /opt/data/config.yaml' >/dev/null
+fi
+
+exec docker run --rm -i \
+  --entrypoint /opt/hermes/.venv/bin/hermes-acp \
+  --name "cumora-hermes-$agent_id-$$" \
+  -v "$volume:/opt/data" \
+  -v "$home_dir:$home_dir" \
+  -v "$ipc_dir:$ipc_dir" \
+  -w "$home_dir" \
+  -e "CUMORA_AGENT_ID=$agent_id" \
+  -e "CUMORA_AGENT_IPC_DIR=$ipc_dir" \
+  -e "PATH=$home_dir/bin:/opt/hermes/bin:/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin" \
+  -e HERMES_ACCEPT_HOOKS=1 \
+  "$image"

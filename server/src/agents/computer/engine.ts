@@ -371,8 +371,34 @@ export const SECURE_ENGINE_MIN_VERSIONS: Readonly<Partial<Record<EngineId, strin
   codex: '0.138.0',
 }
 
-export function allowUnsandboxedByoa(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[ALLOW_UNSANDBOXED_BYOA_ENV] === '1'
+/** Which engines the operator has accepted host-level execution for.
+ *
+ *  `1` / `all` opts in every engine, the historical meaning. A comma-separated
+ *  list (`CUMORA_BYOA_ALLOW_UNSANDBOXED=hermes`) opts in only those engines,
+ *  which is what lets a compatibility engine run on a machine whose Claude and
+ *  Codex agents must keep their fail-closed sandbox — before this, one flag
+ *  unsandboxed the whole daemon. Unknown ids are dropped rather than widening
+ *  anything. */
+export function unsandboxedByoaEngines(env: NodeJS.ProcessEnv = process.env): 'all' | ReadonlySet<EngineId> {
+  const raw = env[ALLOW_UNSANDBOXED_BYOA_ENV]?.trim()
+  if (!raw) return new Set<EngineId>()
+  const lowered = raw.toLowerCase()
+  if (lowered === '1' || lowered === 'all' || lowered === 'true') return 'all'
+  return new Set<EngineId>(
+    lowered.split(',')
+      .map((id) => id.trim())
+      .filter((id): id is EngineId => (ENGINE_IDS as string[]).includes(id)),
+  )
+}
+
+/** Has the operator accepted host-level execution — for `engine` when given,
+ *  or for anything at all when not? Call sites that configure ONE engine's
+ *  boundary must name it; a bare call still answers "is any opt-in active",
+ *  which is what the daemon's warnings and shim placement key off. */
+export function allowUnsandboxedByoa(env: NodeJS.ProcessEnv = process.env, engine?: EngineId): boolean {
+  const scope = unsandboxedByoaEngines(env)
+  if (scope === 'all') return true
+  return engine ? scope.has(engine) : scope.size > 0
 }
 
 export function runnableEngineIds(
@@ -380,9 +406,10 @@ export function runnableEngineIds(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
 ): EngineId[] {
-  if (allowUnsandboxedByoa(env)) return [...installed]
   const safe = new Set(SANDBOXED_ENGINE_IDS)
-  return installed.filter((id) => safe.has(id) && !(platform === 'win32' && id === 'claude'))
+  return installed.filter((id) =>
+    (allowUnsandboxedByoa(env, id) || safe.has(id))
+    && !(platform === 'win32' && id === 'claude' && !allowUnsandboxedByoa(env, 'claude')))
 }
 
 export interface RunnableEngineEvaluation {
@@ -451,7 +478,12 @@ export async function evaluateRunnableEngines(
   platform: NodeJS.Platform = process.platform,
 ): Promise<RunnableEngineEvaluation> {
   const candidates = runnableEngineIds(installed, env, platform)
-  if (allowUnsandboxedByoa(env)) return { runnable: candidates, blocked: [] }
+  // Whole-daemon opt-in keeps its historical meaning: no boundary is imposed
+  // on anything, so no version can make an engine safe or unsafe. A SCOPED
+  // opt-in must not do that — the engines it does not name keep their
+  // capability probe, which is the check that keeps a too-old claude/codex
+  // from being treated as sandboxed.
+  if (unsandboxedByoaEngines(env) === 'all') return { runnable: candidates, blocked: [] }
 
   const snapshot = await snapshotDetectedEngines(candidates)
   const probes = new Map(await Promise.all(snapshot.map(async (entry) => {
@@ -474,6 +506,7 @@ export async function evaluateRunnableEngines(
   const blocked: RunnableEngineEvaluation['blocked'] = []
   const temporarilyUnverifiable: EngineId[] = []
   for (const id of candidates) {
+    if (allowUnsandboxedByoa(env, id)) { runnable.push(id); continue }
     const probe = probes.get(id)
     const version = probe?.version ?? null
     const reason = secureEngineCapabilityReason(id, version, platform, linuxSandboxDeps)
@@ -1627,7 +1660,7 @@ function claudeSecureFlags(agentHome: string, env: NodeJS.ProcessEnv): string[] 
  * denies those names to every model-spawned subprocess. Compatibility mode
  * keeps Claude's native settings loading and its already-explicit host risk. */
 function claudeCoreEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return allowUnsandboxedByoa(env) ? { ...env } : withClaudeUserSettingsEnv(env)
+  return allowUnsandboxedByoa(env, 'claude') ? { ...env } : withClaudeUserSettingsEnv(env)
 }
 
 /** Pick the small brain inside the local provider namespace. An explicit
@@ -1648,14 +1681,14 @@ function claudeFastModelArgs(env: NodeJS.ProcessEnv, requested?: string | null):
 
 function claudeTurnEnv(env: NodeJS.ProcessEnv, fastModel?: string | null): NodeJS.ProcessEnv {
   const core = claudeCoreEnv(env)
-  if (!allowUnsandboxedByoa(core)) {
+  if (!allowUnsandboxedByoa(core, 'claude')) {
     for (const [key, value] of Object.entries(readClaudeUserSettings(env).turnEnv)) {
       if (core[key] === undefined) core[key] = value
     }
   }
   const turnEnv: NodeJS.ProcessEnv = {
     ...core,
-    CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: allowUnsandboxedByoa(core)
+    CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: allowUnsandboxedByoa(core, 'claude')
       ? core.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
       : '1',
   }
@@ -1691,7 +1724,7 @@ class ClaudeAdapter implements EngineAdapter {
     // before (unchanged).
     const base = flags.length
       ? [...flags, '-p']
-      : allowUnsandboxedByoa(env)
+      : allowUnsandboxedByoa(env, 'claude')
         ? ['-p', ...model, '--output-format', 'json', '--dangerously-skip-permissions', '--strict-mcp-config']
         : ['-p', ...model, '--output-format', 'json', '--restricted', '--tools', '', '--strict-mcp-config']
     const argv = wantsStdinPrompt ? base : (flags.length ? [...base, args.prompt] : ['-p', args.prompt, ...base.slice(1)])
@@ -1723,7 +1756,7 @@ class ClaudeAdapter implements EngineAdapter {
     const env = claudeCoreEnv(args.env)
     const model = args.tier === 'small' ? claudeFastModelArgs(env) : []
     const { command, shell, wantsStdinPrompt } = resolveSpawn(this.bin)
-    const base = allowUnsandboxedByoa(env)
+    const base = allowUnsandboxedByoa(env, 'claude')
       ? ['-p', ...model, '--output-format', 'text', '--dangerously-skip-permissions', '--strict-mcp-config']
       : ['-p', ...model, '--output-format', 'text', '--restricted', '--tools', '', '--strict-mcp-config']
     const argv = wantsStdinPrompt ? base : ['-p', DOCTOR_PROMPT, ...base.slice(1)]
@@ -1755,7 +1788,7 @@ class ClaudeAdapter implements EngineAdapter {
     catch (err) { return { ok: false, detail: `could not write standing-prompt probe file: ${err instanceof Error ? err.message : String(err)}` } }
     const env = claudeCoreEnv(args.env)
     const { command, shell, wantsStdinPrompt } = resolveSpawn(this.bin)
-    const base = allowUnsandboxedByoa(env)
+    const base = allowUnsandboxedByoa(env, 'claude')
       ? ['-p', '--output-format', 'text', '--append-system-prompt-file', promptFile, '--dangerously-skip-permissions']
       : [
           '-p', '--output-format', 'text', '--append-system-prompt-file', promptFile,
@@ -1786,7 +1819,7 @@ class ClaudeAdapter implements EngineAdapter {
     await atomicAgentWrite(join(home, 'CLAUDE.md'), PERSONA_HEADER(persona))
     // Legacy settings for unsandboxed compatibility mode. Restricted mode
     // ignores project settings and receives its narrow inline policy instead.
-    if (allowUnsandboxedByoa()) {
+    if (allowUnsandboxedByoa(process.env, 'claude')) {
       const settings = join(home, '.claude', 'settings.json')
       if (!(await exists(settings))) {
         await atomicAgentWrite(settings, JSON.stringify({ permissions: { allow: ['Bash'] } }, null, 2))
@@ -1811,7 +1844,7 @@ class ClaudeAdapter implements EngineAdapter {
     // unchanged (prompt in argv).
     const base = flags.length
       ? [...flags, ...resume, '-p']
-      : allowUnsandboxedByoa(env)
+      : allowUnsandboxedByoa(env, 'claude')
         ? ['-p', ...resume, ...model, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions']
         : ['-p', ...resume, ...model, '--output-format', 'stream-json', '--verbose', ...claudeSecureFlags(args.home, env)]
     const argv = wantsStdinPrompt ? base : (flags.length ? [...base, args.prompt] : ['-p', args.prompt, ...base.slice(1)])
@@ -1840,7 +1873,7 @@ class ClaudeAdapter implements EngineAdapter {
       try { atomicAgentWriteSync(file, args.standingPrompt); sys = ['--append-system-prompt-file', file]; carriesStanding = true }
       catch { /* couldn't write → leave it; the daemon inlines the standing prompt instead */ }
     }
-    const argv = allowUnsandboxedByoa(env)
+    const argv = allowUnsandboxedByoa(env, 'claude')
       ? [
           '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
           ...resume, ...sys, ...model, '--dangerously-skip-permissions',
@@ -1886,7 +1919,7 @@ const CODEX_SECURE_CONFIG_ARGS = [
 ]
 
 function codexThreadSecurityParams(): Record<string, unknown> {
-  return allowUnsandboxedByoa()
+  return allowUnsandboxedByoa(process.env, 'claude')
     ? { approvalPolicy: 'never', sandbox: 'danger-full-access' }
     : { approvalPolicy: 'never', sandbox: 'workspace-write' }
 }
@@ -2301,12 +2334,12 @@ class CodexAdapter implements EngineAdapter {
     // support tier — so that's the local cerebellum here. Cheap model, no big
     // brain, no cloud. Override with CUMORA_TRIAGE_MODEL if your codex auth has
     // a different small model.
-    const flags = allowUnsandboxedByoa() ? extraArgs('CUMORA_TRIAGE_ARGS') : []
+    const flags = allowUnsandboxedByoa(process.env, 'codex') ? extraArgs('CUMORA_TRIAGE_ARGS') : []
     const model = ['--model', args.model || 'gpt-5.4-mini']
     const { command, shell, argsPrefix } = resolveCodexSpawn()
     const codexArgs = flags.length
       ? ['exec', ...flags, '-']
-      : allowUnsandboxedByoa()
+      : allowUnsandboxedByoa(process.env, 'codex')
         ? ['exec', ...model, '--skip-git-repo-check', '-']
         : [...codexSecureExecArgs({ home: args.cwd, env: args.env }, true), ...model, '--skip-git-repo-check', '-']
     const argv = [...argsPrefix, ...codexArgs]
@@ -2322,7 +2355,7 @@ class CodexAdapter implements EngineAdapter {
     // for a tool-free one-token reply.
     const model = args.tier === 'small' ? ['--model', triageModel('gpt-5.4-mini')] : []
     const { command, shell, argsPrefix } = resolveCodexSpawn()
-    const codexArgs = allowUnsandboxedByoa()
+    const codexArgs = allowUnsandboxedByoa(process.env, 'codex')
       ? ['exec', ...model, '--skip-git-repo-check', '-']
       : [...codexSecureExecArgs({ home: args.cwd, env: args.env }, true), ...model, '--skip-git-repo-check', '-']
     const argv = [...argsPrefix, ...codexArgs]
@@ -2336,7 +2369,7 @@ class CodexAdapter implements EngineAdapter {
     // any of these is true, the wake path collapses to `codex exec ...` which
     // probe() already covers — running the JSON-RPC probe would just add a false
     // signal. Mark skipped and let doctor hide the line.
-    if (!allowUnsandboxedByoa()
+    if (!allowUnsandboxedByoa(process.env, 'codex')
         || unsafeEngineArgs('CUMORA_CODEX_ARGS').length
         || process.env.CUMORA_CODEX_NO_APP_SERVER === '1'
         || IS_WIN) {
@@ -2442,7 +2475,7 @@ class CodexAdapter implements EngineAdapter {
     const flags = unsafeEngineArgs('CUMORA_CODEX_ARGS')
     const base = flags.length
       ? ['exec', ...flags]
-      : allowUnsandboxedByoa()
+      : allowUnsandboxedByoa(process.env, 'codex')
         ? ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check']
         : [...codexSecureExecArgs(args), '--skip-git-repo-check']
     const model = args.model ? ['--model', args.model] : []
@@ -2487,7 +2520,7 @@ class CodexAdapter implements EngineAdapter {
     // Confine the persistent process with the same profile the one-shot path
     // uses. `-c` are global flags and apply to app-server too, so filesystem,
     // network, environment and features are identical on both paths.
-    const secure = allowUnsandboxedByoa()
+    const secure = allowUnsandboxedByoa(process.env, 'codex')
       ? []
       : codexSecureConfigOverrides({ home: args.home, env: args.env })
     return new CodexSession(command, [...argsPrefix, ...secure, 'app-server', '--listen', 'stdio://'], args.home, args.env, args)
@@ -2957,7 +2990,7 @@ function resolveZcodeAcpSpawn(env: NodeJS.ProcessEnv): { command: string; args: 
   return { command: npx.command, args: ['-y', 'zcode-acp-server'], shell: npx.shell }
 }
 
-interface ZcodeTurnOptions {
+interface AcpTurnOptions {
   cwd: string
   env: NodeJS.ProcessEnv
   prompt: string
@@ -2967,7 +3000,7 @@ interface ZcodeTurnOptions {
   onHopUsage?: (r: EngineHopReport) => void
 }
 
-interface ZcodeSessionOptions extends EngineSessionArgs {
+interface AcpSessionOptions extends EngineSessionArgs {
   /** Assistant text chunks, streamed out for one-shot callers (classify/
    *  probe/run read the turn's reply text; persistent wakes only log it). */
   onAgentText?: (text: string) => void
@@ -2982,6 +3015,22 @@ interface ZcodeSessionOptions extends EngineSessionArgs {
  *  resumed session that dies mid-life maps through this adapter-aware rule to
  *  the same fresh-retry recovery vocabulary as the other engines. */
 const ZCODE_MISSING_SESSION_RE = /session is not active|no such session|unknown session/i
+
+/** What differs between two engines that both speak ACP over stdio: how to
+ *  spawn them, how their backend phrases a dead session, and the tag their log
+ *  lines carry. Everything else — framing, handshake, turn settlement, model
+ *  pin, usage — is identical, so it lives once in AcpEngineSession. */
+interface AcpEngineProfile {
+  id: EngineId
+  resolveSpawn(env: NodeJS.ProcessEnv): { command: string; args: string[]; shell: boolean }
+  missingSessionRe: RegExp
+}
+
+const ZCODE_ACP: AcpEngineProfile = {
+  id: 'zcode',
+  resolveSpawn: resolveZcodeAcpSpawn,
+  missingSessionRe: ZCODE_MISSING_SESSION_RE,
+}
 
 /** Hook surface the connection exposes upward. The connection owns only wire
  *  state — turn settlement stays with the session above it. */
@@ -3147,7 +3196,7 @@ class AcpRpcConnection {
  *  Mid-turn steer is not in the ACP surface — steer() is a no-op and the
  *  daemon's next-wake coalescing carries the ping (same contract as
  *  GrokSession). */
-class ZcodeSession implements EngineSession {
+class AcpEngineSession implements EngineSession {
   readonly carriesStandingPrompt = false
 
   private readonly conn: AcpRpcConnection
@@ -3160,14 +3209,19 @@ class ZcodeSession implements EngineSession {
   private steerWarned = false
   private stopped = false
 
-  constructor(home: string, env: NodeJS.ProcessEnv, opts: ZcodeSessionOptions) {
+  constructor(
+    private readonly profile: AcpEngineProfile,
+    home: string,
+    env: NodeJS.ProcessEnv,
+    opts: AcpSessionOptions,
+  ) {
     this.onLog = opts.onLog
     this.onHopUsage = opts.onHopUsage
     this.onAgentText = opts.onAgentText
     this.model = opts.model ?? null
     this.modelUnapplied = !!opts.model
     this.conn = new AcpRpcConnection(
-      resolveZcodeAcpSpawn(env),
+      profile.resolveSpawn(env),
       home,
       env,
       opts.resumeSessionId ?? null,
@@ -3177,7 +3231,7 @@ class ZcodeSession implements EngineSession {
         onNotification: (msg) => this.onUpdate(msg),
         onDeath: (code, why) => this.onDeath(code, why),
         onLoadFallback: (why) => {
-          this.onLog(`[zcode] session/load failed (${why}) — starting a fresh session`)
+          this.onLog(`[${profile.id}] session/load failed (${why}) — starting a fresh session`)
         },
       },
       opts.signal,
@@ -3214,7 +3268,7 @@ class ZcodeSession implements EngineSession {
       if (this.onHopUsage) {
         try {
           this.onHopUsage({
-            model: this.model ?? 'zcode',
+            model: this.model ?? this.profile.id,
             usage: usage ?? {},
             latencyMs: Date.now() - startedAt,
             hopIndex: 1,
@@ -3256,7 +3310,7 @@ class ZcodeSession implements EngineSession {
       this.modelUnapplied = false
     } catch (err) {
       const why = err instanceof Error ? err.message : String(err)
-      this.log(`[zcode] model pin rejected (${why}) — continuing on the engine default`)
+      this.log(`[${this.profile.id}] model pin rejected (${why}) — continuing on the engine default`)
     }
   }
 
@@ -3268,7 +3322,7 @@ class ZcodeSession implements EngineSession {
     return classifyEngineResult({
       exitCode,
       error: message,
-      failure: wasResume && ZCODE_MISSING_SESSION_RE.test(message)
+      failure: wasResume && this.profile.missingSessionRe.test(message)
         ? { kind: 'resume-not-found', message, diagnostic: message }
         : undefined,
       sessionId: this.conn.sid,
@@ -3291,12 +3345,12 @@ class ZcodeSession implements EngineSession {
     const u = (msg.params?.update ?? msg.params) as Record<string, unknown> | undefined
     const kind = typeof u?.sessionUpdate === 'string' ? u.sessionUpdate : null
     if (kind === 'tool_call' && typeof u?.title === 'string') {
-      this.log(`[zcode] tool ${u.title}`)
+      this.log(`[${this.profile.id}] tool ${u.title}`)
     } else if (kind === 'agent_message_chunk') {
       const content = u?.content as { text?: unknown } | undefined
       if (typeof content?.text === 'string' && content.text) {
         this.onAgentText?.(content.text)
-        if (content.text.trim()) this.log(`[zcode] » ${content.text.replace(/\s+/g, ' ').slice(0, 200)}`)
+        if (content.text.trim()) this.log(`[${this.profile.id}] » ${content.text.replace(/\s+/g, ' ').slice(0, 200)}`)
       }
     }
   }
@@ -3309,9 +3363,9 @@ class ZcodeSession implements EngineSession {
  *  missing bridge or a rejected handshake is a failed turn, not a thrown
  *  one. One-shot turns never resume, so hadResume stays false and the generic
  *  classifier still tags auth/rate-limit/overflow/transport kinds. */
-async function runZcodeAcpTurn(opts: ZcodeTurnOptions): Promise<EngineRunResult & { text: string }> {
+async function runAcpTurn(profile: AcpEngineProfile, opts: AcpTurnOptions): Promise<EngineRunResult & { text: string }> {
   const chunks: string[] = []
-  const session = new ZcodeSession(opts.cwd, opts.env, {
+  const session = new AcpEngineSession(profile, opts.cwd, opts.env, {
     home: opts.cwd,
     env: opts.env,
     model: opts.model,
@@ -3346,7 +3400,7 @@ class ZcodeAdapter implements EngineAdapter {
   }
 
   run(args: EngineRunArgs): Promise<EngineRunResult> {
-    return runZcodeAcpTurn({
+    return runAcpTurn(ZCODE_ACP, {
       cwd: args.home,
       env: args.env,
       prompt: args.prompt,
@@ -3358,13 +3412,13 @@ class ZcodeAdapter implements EngineAdapter {
   }
 
   startSession(args: EngineSessionArgs): EngineSession | null {
-    return new ZcodeSession(args.home, args.env, args)
+    return new AcpEngineSession(ZCODE_ACP, args.home, args.env, args)
   }
 
   classify(args: EngineClassifyArgs): Promise<EngineClassifyResult> {
     // One fresh bridge process in the neutral triage cwd: slower than Claude's
     // restricted one-shot, but the bridge has no cheaper no-tool surface.
-    return runZcodeAcpTurn({
+    return runAcpTurn(ZCODE_ACP, {
       cwd: args.cwd,
       env: args.env,
       prompt: args.prompt,
@@ -3377,7 +3431,7 @@ class ZcodeAdapter implements EngineAdapter {
   probe(args: EngineProbeArgs): Promise<EngineClassifyResult> {
     // Both tiers run the same bridge probe: the model catalog is the
     // operator's zcode config, so there is no first-party cheap alias to pin.
-    return runZcodeAcpTurn({ cwd: args.cwd, env: args.env, prompt: DOCTOR_PROMPT, signal: args.signal })
+    return runAcpTurn(ZCODE_ACP, { cwd: args.cwd, env: args.env, prompt: DOCTOR_PROMPT, signal: args.signal })
   }
 
   async probeWake(args: EngineWakeProbeArgs): Promise<EngineWakeProbeResult> {
@@ -3385,7 +3439,7 @@ class ZcodeAdapter implements EngineAdapter {
     // Run a real session against the same spawn the wake uses and wait for the
     // handshake to settle, then tear down; the bridge's lazy session/new means
     // the probe leaves no backend session behind.
-    const session = new ZcodeSession(args.cwd, args.env, {
+    const session = new AcpEngineSession(ZCODE_ACP, args.cwd, args.env, {
       home: args.cwd,
       env: args.env,
       standingPrompt: null,
