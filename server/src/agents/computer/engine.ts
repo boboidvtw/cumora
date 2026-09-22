@@ -3265,6 +3265,9 @@ class AcpEngineSession implements EngineSession {
   private turn: { resolve: (r: EngineRunResult) => void } | null = null
   private steerWarned = false
   private stopped = false
+  /** Assistant text not yet logged. Engines that stream token by token
+   *  (Hermes) would otherwise write one log line per word. */
+  private textLine = ''
 
   constructor(
     private readonly profile: AcpEngineProfile,
@@ -3318,7 +3321,7 @@ class AcpEngineSession implements EngineSession {
     // races the async body below, and whichever lands first closes the turn.
     // Held in a local because onDeath() nulls this.turn when it settles first.
     let settled = false
-    const settle = (r: EngineRunResult) => { if (!settled) { settled = true; this.turn = null; resolveTurn(r) } }
+    const settle = (r: EngineRunResult) => { if (!settled) { settled = true; this.turn = null; this.flushText(); resolveTurn(r) } }
     this.turn = { resolve: settle }
     try {
       await this.conn.ready
@@ -3412,14 +3415,29 @@ class AcpEngineSession implements EngineSession {
     const u = (msg.params?.update ?? msg.params) as Record<string, unknown> | undefined
     const kind = typeof u?.sessionUpdate === 'string' ? u.sessionUpdate : null
     if (kind === 'tool_call' && typeof u?.title === 'string') {
+      this.flushText()
       this.log(`[${this.profile.id}] tool ${u.title}`)
     } else if (kind === 'agent_message_chunk') {
       const content = u?.content as { text?: unknown } | undefined
       if (typeof content?.text === 'string' && content.text) {
         this.onAgentText?.(content.text)
-        if (content.text.trim()) this.log(`[${this.profile.id}] » ${content.text.replace(/\s+/g, ' ').slice(0, 200)}`)
+        this.textLine += content.text
+        const lines = this.textLine.split('\n')
+        this.textLine = lines.pop() ?? ''
+        for (const line of lines) this.logText(line)
+        if (this.textLine.length >= 200) this.flushText()
       }
     }
+  }
+
+  private flushText(): void {
+    const rest = this.textLine
+    this.textLine = ''
+    this.logText(rest)
+  }
+
+  private logText(text: string): void {
+    if (text.trim()) this.log(`[${this.profile.id}] » ${text.replace(/\s+/g, ' ').trim().slice(0, 200)}`)
   }
 
   private log(line: string): void { this.onLog(line) }

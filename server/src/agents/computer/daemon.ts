@@ -49,7 +49,7 @@ import {
 import { SKYPE_EMOTICONS_GUIDE } from '../skype-emoticons.js'
 import { finalizeTriage, isRateLimited, parseTriage } from '../triage-core.js'
 import { type ActionSurface, actionSurfaceFor, actionSurfaceText, calendarExampleText, postingMechanicsText } from './prompt-surface.js'
-import { allowUnsandboxedByoa, detectEnginesWithStatus, ENGINE_IDS, engineFailureOf, type DetectedEngineSnapshot, type EngineHopReport, type EngineId, type EngineRunResult, type EngineSession, type EngineUsage, enrichDetectedEngines, evaluateRunnableEngines, getAdapter, runEngineDoctor, type RunnableEngineEvaluation, snapshotDetectedEngines } from './engine.js'
+import { allowUnsandboxedByoa, unsandboxedByoaEngines, detectEnginesWithStatus, ENGINE_IDS, engineFailureOf, type DetectedEngineSnapshot, type EngineHopReport, type EngineId, type EngineRunResult, type EngineSession, type EngineUsage, enrichDetectedEngines, evaluateRunnableEngines, getAdapter, runEngineDoctor, type RunnableEngineEvaluation, snapshotDetectedEngines } from './engine.js'
 import { EngineSessionStore, sessionIdPreview } from './session-store.js'
 import { runWithSessionRecovery } from './session-recovery.js'
 
@@ -3446,7 +3446,9 @@ function installTimestampedLogging(): void {
 async function doRun(serverOverride?: string): Promise<void> {
   installTimestampedLogging()
   if (allowUnsandboxedByoa()) {
-    console.warn('[computer] SECURITY WARNING: CUMORA_BYOA_ALLOW_UNSANDBOXED=1 — local model engines may read host files, inherit credentials, and use the network')
+    const scope = unsandboxedByoaEngines()
+    const which = scope === 'all' ? '=1 — local model engines' : `=${[...scope].join(',')} — these engines`
+    console.warn(`[computer] SECURITY WARNING: CUMORA_BYOA_ALLOW_UNSANDBOXED${which} may read host files, inherit credentials, and use the network`)
   } else {
     for (const name of [
       'CUMORA_CLAUDE_ARGS', 'CUMORA_CODEX_ARGS', 'CUMORA_GROK_ARGS',

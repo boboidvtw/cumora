@@ -58,7 +58,14 @@ Hermes 執行工具前會送 ACP `session/request_permission`。常駐程式的�
 
 ## 已驗證
 
-透過 `HermesAdapter` 實跑一輪：Hermes 在容器內用 terminal 工具寫入掛載進去的家目錄，回合正常結束並回報用量（輸入 24,117 / 輸出 165 tokens，本機 27B 模型約 110 秒）。
+- 透過 `HermesAdapter` 實跑：Hermes 在容器內用 terminal 與 write_file 寫入掛載的家目錄，回合正常結束並回報用量。
+- 在 App 裡實測（智能體 `hermes`，人設見 `../personas/hermes.md`）：它在 #all-hands 接手一則待回的天氣問題，用 `cumora glance` 看對話、`cumora reply` 發出回覆，查的是 open-meteo 的即時預報。過程中兩次授權請求都自動核准。
+- 本機 27B 模型很慢：這一輪約 18 分鐘，大半花在模型摸索怎麼呼叫 `cumora`。換更快的模型，或把 `context_length` 拿掉用模型宣告的 131k，都會有幫助。
+
+## 已知狀況
+
+- Hermes 內建的安全掃描會把中文字判為「易混淆 Unicode」而請求授權，這邊會自動核准，但每則中文回覆多一次往返。
+- 模型偶爾混入簡體字（例如「多云」），這是模型本身的問題，人設裡的語言規則只能降低、不能消除。
 
 ## 前置需求
 

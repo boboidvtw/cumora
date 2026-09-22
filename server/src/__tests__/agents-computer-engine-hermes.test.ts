@@ -60,6 +60,12 @@ rl.on('line', (line) => {
   if (msg.method === 'initialize') return reply({})
   if (msg.method === 'session/new') return reply({ sessionId: 'sess-1' })
   if (msg.method === 'session/prompt') {
+    if (mode === 'chunked') {
+      for (const text of ['hel', 'lo ', 'there\\nsec', 'ond ', 'line']) {
+        out({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } } } })
+      }
+      return out({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } })
+    }
     pendingPrompt = msg.id
     if (mode === 'unknown-method') {
       // A string id, and a method Cumora does not implement.
@@ -177,4 +183,17 @@ test('hermes counts as installed only through its container wrapper', async () =
     if (saved === undefined) delete process.env.CUMORA_HERMES_ACP_BIN
     else process.env.CUMORA_HERMES_ACP_BIN = saved
   }
+})
+
+test('streamed assistant text is logged per line, not per chunk', async () => {
+  const f = await fixture()
+  await getAdapter('hermes').run({
+    home: f.home,
+    env: { ...process.env, CUMORA_HERMES_ACP_BIN: f.fake, FAKE_ACP_LOG: f.log, FAKE_ACP_MODE: 'chunked' },
+    prompt: 'go',
+    signal: new AbortController().signal,
+    onLog: (line) => f.logs.push(line),
+  } as Parameters<ReturnType<typeof getAdapter>['run']>[0])
+  const said = f.logs.filter((l) => l.startsWith('[hermes] » '))
+  assert.deepEqual(said, ['[hermes] » hello there', '[hermes] » second line'])
 })

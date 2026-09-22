@@ -9,6 +9,10 @@
 # drops the whole sandbox.
 #
 # Trade-off: no auto-update. After pulling upstream changes, re-run this script.
+# CUMORA_SUPERVISED is deliberately NOT set: it tells the daemon a clean exit
+# relaunches on `cumora@latest`, which is false here — with it, a checkout
+# daemon saw every npm release as an update and restarted itself whenever idle,
+# forever, dropping each agent's warm engine session.
 #
 #   ./install-local-daemon.sh                      # reads ~/Projects
 #   CUMORA_AGENT_READ_PATHS=~/code ./install-local-daemon.sh
@@ -28,6 +32,7 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 read_paths=${CUMORA_AGENT_READ_PATHS:-$HOME/Projects}
+version=$(node -p "require('$repo/package.json').version")
 
 # --hermes: let this daemon drive the Hermes engine through its container
 # wrapper. Only Hermes is exempted from the sandbox requirement; Claude and
@@ -76,7 +81,7 @@ cat > "$plist" <<PLIST
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>$PATH</string>
     <key>HOME</key><string>$HOME</string>
-    <key>CUMORA_SUPERVISED</key><string>1</string>
+    <key>CUMORA_VERSION</key><string>$version</string>
     <key>CUMORA_AGENT_READ_PATHS</key><string>$read_paths</string>
 $hermes_env
   </dict>
