@@ -23,7 +23,7 @@ import { signAgentToken } from '../runtime/jwt.js'
 import type { EngineModelCatalog, EngineModelOption, FastModelScope, ModelCatalogSource } from './model-catalog.js'
 
 export type ComputerKind = 'cloud' | 'local' | 'vps'
-export type EngineId = 'managed' | 'claude' | 'codex' | 'grok' | 'cursor' | 'opencode' | 'pi' | 'gemini' | 'qwen' | 'antigravity' | 'zcode'
+export type EngineId = 'managed' | 'claude' | 'codex' | 'grok' | 'cursor' | 'opencode' | 'pi' | 'gemini' | 'qwen' | 'antigravity' | 'zcode' | 'hermes'
 export type ComputerStatus = 'online' | 'offline' | 'busy'
 
 /** How long a paired computer can go without a heartbeat before the sweep
@@ -64,6 +64,7 @@ const PAIRABLE: Record<Exclude<EngineId, 'managed'>, true> = {
   qwen: true,
   antigravity: true,
   zcode: true,
+  hermes: true,
 }
 export const PAIRABLE_ENGINES: ReadonlySet<string> = new Set<string>(Object.keys(PAIRABLE))
 
@@ -116,6 +117,7 @@ const ENGINE_BINS: Record<Exclude<EngineId, 'managed'>, string> = {
   qwen: 'qwen',
   antigravity: 'agy',
   zcode: 'zcode',
+  hermes: 'hermes-acp-container',
 }
 
 /** Cached PATH snapshot from the daemon. The app reads this; it never probes. */
@@ -725,6 +727,7 @@ export async function listAgentsForComputer(computerId: string, supportsProvider
   const qwenDefault = process.env.CUMORA_DEFAULT_QWEN_MODEL?.trim() || null
   const antigravityDefault = process.env.CUMORA_DEFAULT_ANTIGRAVITY_MODEL?.trim() || null
   const zcodeDefault = process.env.CUMORA_DEFAULT_ZCODE_MODEL?.trim() || null
+  const hermesDefault = process.env.CUMORA_DEFAULT_HERMES_MODEL?.trim() || null
   return rows.map((r) => {
     const { availableEngines, detectedEngines, engineDefaults, ...agent } = r
     // A profile's endpoint owns its model namespace: neither the computer's
@@ -774,6 +777,8 @@ export async function listAgentsForComputer(computerId: string, supportsProvider
                       ? antigravityDefault
                       : r.engine === 'zcode'
                         ? zcodeDefault
+                      : r.engine === 'hermes'
+                        ? hermesDefault
                     : null
     return dflt ? { ...agent, model: dflt, fastModel: fastModelWithEngineDefault } : { ...agent, fastModel: fastModelWithEngineDefault }
   })

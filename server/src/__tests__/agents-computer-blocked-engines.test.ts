@@ -86,9 +86,9 @@ test('an unknown blocked id is dropped like any other', () => {
   // The pairable allowlist governs both lists; a newer daemon naming an engine
   // this server has no adapter for must not create a phantom row.
   const out = sanitizeDetectedEngines(
-    [{ id: 'hermes', bin: 'hermes', path: '/bin/hermes', blockedReason: 'nope' }],
+    [{ id: 'goose', bin: 'goose', path: '/bin/goose', blockedReason: 'nope' }],
     ['codex'],
-    ['hermes'],
+    ['goose'],
   )
   assert.deepEqual(out.map((e) => e.id), ['codex'])
 })

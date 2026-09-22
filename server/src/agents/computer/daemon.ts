@@ -833,6 +833,9 @@ export function authFailureHint(engine: EngineId, detail: string): string {
   if (engine === 'zcode') {
     return 'Open ZCode on that computer and run `zcode` to refresh its login, model access, or quota, then wake the agent again.'
   }
+  if (engine === 'hermes') {
+    return 'Hermes runs in a container against the model in its config.yaml: check that the model server (LM Studio by default) is up and the model is loaded, then wake the agent again.'
+  }
   return 'Check the daemon terminal for details, then wake the agent again.'
 }
 
@@ -855,6 +858,8 @@ function missingEngineMessage(): string {
     '  - ZCode: install the `zcode` CLI, then run `zcode` once to sign in',
     '    (the daemon drives it through the npm-published `zcode-acp-server` bridge via npx;',
     '     CUMORA_ZCODE_ACP_BIN pins a specific bridge copy when needed)',
+    '  - Hermes: runs in a container, never on the host — put `hermes-acp-container`',
+    '    (deploy/orbstack/hermes/) on PATH or point CUMORA_HERMES_ACP_BIN at it',
     '',
     'After that, rerun:',
     '  npx cumora@latest agent computer --pair <code>',
@@ -2497,6 +2502,7 @@ export class AgentRunner {
     if (this.adapter.id === 'pi') return this.agent.model ?? '<pi-default>'
     if (this.adapter.id === 'antigravity') return this.agent.model ?? 'gemini-3.8-flash-high'
     if (this.adapter.id === 'zcode') return this.agent.model ?? '<zcode-default>'
+    if (this.adapter.id === 'hermes') return this.agent.model ?? '<hermes-default>'
     if (this.adapter.id === 'cursor') return this.agent.model ?? '<cursor-default>'
     return this.agent.model ?? '<cursor-default>'
   }

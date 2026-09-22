@@ -13,6 +13,7 @@
 #   ./install-local-daemon.sh                      # reads ~/Projects
 #   CUMORA_AGENT_READ_PATHS=~/code ./install-local-daemon.sh
 #   ./install-local-daemon.sh --uninstall          # back to the npm daemon
+#   ./install-local-daemon.sh --hermes             # also run Hermes agents (in containers)
 set -eu
 cd "$(dirname "$0")"
 repo=$(cd ../.. && pwd)
@@ -27,6 +28,17 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 read_paths=${CUMORA_AGENT_READ_PATHS:-$HOME/Projects}
+
+# --hermes: let this daemon drive the Hermes engine through its container
+# wrapper. Only Hermes is exempted from the sandbox requirement; Claude and
+# Codex agents keep theirs.
+hermes_env=
+if [ "${1:-}" = "--hermes" ]; then
+  hermes_bin="$(pwd)/hermes/hermes-acp-container"
+  command -v docker >/dev/null 2>&1 || { echo "找不到 docker，Hermes 需要 OrbStack / Docker" >&2; exit 1; }
+  hermes_env="    <key>CUMORA_BYOA_ALLOW_UNSANDBOXED</key><string>hermes</string>
+    <key>CUMORA_HERMES_ACP_BIN</key><string>$hermes_bin</string>"
+fi
 origin=$(sed -n 's/^CUMORA_PUBLIC_ORIGIN=//p' .env)
 origin=${origin:-http://localhost:5181}
 
@@ -66,6 +78,7 @@ cat > "$plist" <<PLIST
     <key>HOME</key><string>$HOME</string>
     <key>CUMORA_SUPERVISED</key><string>1</string>
     <key>CUMORA_AGENT_READ_PATHS</key><string>$read_paths</string>
+$hermes_env
   </dict>
 </dict></plist>
 PLIST
@@ -74,4 +87,5 @@ launchctl unload "$plist" 2>/dev/null || true
 launchctl load "$plist"
 echo "自建常駐程式已啟動（來源：$repo）。"
 echo "智能體可讀目錄：$read_paths"
+[ -n "$hermes_env" ] && echo "Hermes 引擎：已啟用（容器執行，模型走宿主 LM Studio）"
 echo "日誌：~/.cumora/daemon.log"

@@ -71,10 +71,10 @@ test('a detection of only unknown ids is treated as empty', () => {
   // clear the list either.
   //
   // The fixture has to be ids with NO adapter, so it goes stale every time one
-  // gains one — 'qwen' used to sit here and now drives real wakes. Replace the
+  // gains one — 'qwen' and then 'hermes' used to sit here and now drive real wakes. Replace the
   // ids when that happens rather than deleting the case: what it protects is
   // the compatibility path, not these particular names.
-  assert.equal(mergeDetectedEngines(['claude'], ['hermes', 'not-an-engine']), null)
+  assert.equal(mergeDetectedEngines(['claude'], ['goose', 'not-an-engine']), null)
 })
 
 test('unknown ids are filtered out but known ones still apply', () => {

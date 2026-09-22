@@ -25,15 +25,34 @@ model=${CUMORA_HERMES_MODEL:-qwen3.8-27b}
 model_base_url=${CUMORA_HERMES_BASE_URL:-http://host.docker.internal:1234/v1}
 context_length=${CUMORA_HERMES_CONTEXT:-65536}
 
-agent_id=${CUMORA_AGENT_ID:-}
-ipc_dir=${CUMORA_AGENT_IPC_DIR:-}
-if [ -z "$agent_id" ] || [ -z "$ipc_dir" ]; then
-  echo "hermes-acp-container: CUMORA_AGENT_ID and CUMORA_AGENT_IPC_DIR must be set (the daemon sets both)" >&2
-  exit 64
+# The daemon's engine-inventory rescan asks for a version; answer from the
+# image, which is what actually runs, without touching any agent's state.
+if [ "${1:-}" = "--version" ] || [ "${1:-}" = "version" ]; then
+  exec docker run --rm --entrypoint /opt/hermes/.venv/bin/hermes "$image" --version
 fi
 
-home_dir="$HOME/.cumora/agents/$agent_id"
-mkdir -p "$home_dir" "$ipc_dir"
+# A wake runs with CUMORA_AGENT_ID and CUMORA_AGENT_IPC_DIR set and the agent's
+# home as cwd. `cumora agent computer doctor` probes have neither, so they get a
+# shared throwaway identity and no IPC mount — a probe never posts anything.
+agent_id=${CUMORA_AGENT_ID:-probe}
+ipc_dir=${CUMORA_AGENT_IPC_DIR:-}
+case "$agent_id" in
+  *[!A-Za-z0-9_.-]*|'') echo "hermes-acp-container: unusable agent id '$agent_id'" >&2; exit 64 ;;
+esac
+
+# The daemon spawns us with cwd = the agent's home (or a scratch dir for
+# triage), which is not always ~/.cumora/agents/<id>; mount what we were given.
+home_dir=$(pwd -P)
+case "$home_dir" in
+  "$HOME"|/|/Users|/home) echo "hermes-acp-container: refusing to mount $home_dir as the agent home" >&2; exit 64 ;;
+esac
+# Optional mounts ride the positional parameters so a path with spaces stays
+# one argument.
+set --
+if [ -n "$ipc_dir" ]; then
+  mkdir -p "$ipc_dir"
+  set -- -v "$ipc_dir:$ipc_dir"
+fi
 volume="cumora-hermes-$agent_id"
 
 # First run for this agent: create its volume and write the Hermes config that
@@ -60,7 +79,7 @@ exec docker run --rm -i \
   --name "cumora-hermes-$agent_id-$$" \
   -v "$volume:/opt/data" \
   -v "$home_dir:$home_dir" \
-  -v "$ipc_dir:$ipc_dir" \
+  "$@" \
   -w "$home_dir" \
   -e "CUMORA_AGENT_ID=$agent_id" \
   -e "CUMORA_AGENT_IPC_DIR=$ipc_dir" \

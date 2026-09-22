@@ -56,7 +56,7 @@ export function versionCommandInvocation(
 
 /** How to ask an engine its version, and how to find out what the newest one is. */
 export interface EngineVersionSpec {
-  /** Args that make the binary print its version (`--version` for all but hermes). */
+  /** Args that make the binary print its version (`--version` for every engine). */
   versionArgs: string[]
   /** npm package, when the CLI ships on the public registry. */
   npm?: string
@@ -123,8 +123,9 @@ export const ENGINE_VERSION_SPECS: Record<string, EngineVersionSpec> = {
     versionArgs: ['--version'],
   },
   hermes: {
-    versionArgs: ['version'],
-    selfUpdate: 'hermes update',
+    // The container wrapper answers --version from inside the image; updating
+    // is a `docker pull` of that image, not a host command.
+    versionArgs: ['--version'],
   },
 }
 

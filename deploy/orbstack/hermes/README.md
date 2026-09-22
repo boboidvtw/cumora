@@ -1,4 +1,4 @@
-# Hermes 智能體（容器版）— 進行中
+# Hermes 智能體（容器版）
 
 目標：讓 Hermes Agent 當 Cumora 的一種 BYOA 引擎，這樣建智能體時可以選「引擎 = hermes」，它就帶著 Hermes 自己的工具和 skills（網路搜尋、瀏覽器、GitHub、kanban、cron、MCP）。
 
@@ -16,7 +16,7 @@ Hermes 跑在容器裡，不是宿主上。邊界由我們給，不是信任 Her
 
 | 掛載 | 用途 |
 |---|---|
-| `~/.cumora/agents/<id>` | 這個智能體的家目錄，也是 ACP 的 cwd |
+| 啟動時的 cwd（通常是 `~/.cumora/agents/<id>`） | 這個智能體的家目錄，也是 ACP 的 cwd；拒絕掛載 `$HOME` 或 `/` |
 | `~/.cumora/.runtime-cli-ipc/<id>` | `cumora` shim 跟常駐程式溝通的檔案 IPC |
 | `cumora-hermes-<id>`（volume） | Hermes 自己的狀態與 `config.yaml` |
 
@@ -24,21 +24,41 @@ Hermes 跑在容器裡，不是宿主上。邊界由我們給，不是信任 Her
 
 必須用 `--entrypoint` 直接執行 `hermes-acp`：映像預設的 s6 監督程序會把訊息印到 stdout，而 stdout 是 ACP 的 JSON-RPC 通道。
 
-手動驗證：
+手動驗證（不帶 `CUMORA_AGENT_ID` 時用共用的 `probe` 身分、不掛 IPC）：
 
 ```bash
-CUMORA_AGENT_ID=hermes-probe \
-CUMORA_AGENT_IPC_DIR=~/.cumora/.runtime-cli-ipc/hermes-probe \
-  ./hermes-acp-container
+cd ~/.cumora/agents/hermes-probe && /path/to/hermes-acp-container
 ```
 
-## 還沒做的部分
+## 啟用
 
-1. **`HermesAdapter` 與註冊表接線**。ACP 連線層已經一般化成 `AcpEngineSession` + `AcpEngineProfile`（見 `server/src/agents/computer/engine.ts`），照 ZCode 的樣子加一個 profile 即可。接線點由 `npm run guard:engine-registry` 列出，漏一個就會失敗。
-2. **回覆 ACP 的工具授權請求**（關鍵）。Hermes 執行工具前會送 `session/request_permission` 給客戶端，而目前 `AcpRpcConnection` 只處理通知、不回覆帶 id 的請求，於是引擎會空等到自己超時——先前一次 7 分鐘無回應就是這個。**沒有這段，Hermes 智能體發不出訊息**，因為發訊息就是執行 `cumora reply` 這個工具。做法：帶 id 且帶 method 的訊息一律回覆；只有容器版的 profile 自動核准，其他引擎立刻拒絕而不空等。
-3. **沙箱開關已改成可指定引擎**（未提交）：`CUMORA_BYOA_ALLOW_UNSANDBOXED=hermes` 只解除 Hermes，Claude 與 Codex 維持沙箱與版本檢查；設 `=1` 行為與過去相同。
+```bash
+cd deploy/orbstack
+./install-local-daemon.sh --hermes
+```
 
-第 1、2 項在這個工作階段被自動安全檢查擋下（判定為「建立不安全的智能體」），需要放寬權限才能繼續。
+這會在 launchd 設定裡加上：
+
+- `CUMORA_BYOA_ALLOW_UNSANDBOXED=hermes`：**只**解除 Hermes 的沙箱要求，Claude 與 Codex 維持沙箱與版本檢查。
+- `CUMORA_HERMES_ACP_BIN=<這個資料夾>/hermes-acp-container`：常駐程式只透過這支腳本啟動 Hermes。宿主上的 `hermes` 指令**不會**讓引擎被視為「已安裝」，也永遠不會被直接執行。
+
+接著在 App 建立智能體時選「引擎 = Hermes」。
+
+## 工具授權
+
+Hermes 執行工具前會送 ACP `session/request_permission`。常駐程式的回覆規則（`answerAcpClientRequest`，見 `server/src/agents/computer/engine.ts`）：
+
+| 引擎 | 回覆 |
+|---|---|
+| Hermes | 核准一次（`allow_once`，不寫入 Hermes 的永久設定）——邊界是容器，不是這個回答 |
+| 其他 ACP 引擎（ZCode） | 立刻拒絕（`reject_once`），不再讓回合空等到逾時 |
+| 其他任何反向請求（`fs/*`、`terminal/*`…） | JSON-RPC `-32601`，不再沉默 |
+
+每次授權都會記到 `~/.cumora/daemon.log`，例如 `[hermes] session/request_permission for terminal: … → yes`。
+
+## 已驗證
+
+透過 `HermesAdapter` 實跑一輪：Hermes 在容器內用 terminal 工具寫入掛載進去的家目錄，回合正常結束並回報用量（輸入 24,117 / 輸出 165 tokens，本機 27B 模型約 110 秒）。
 
 ## 前置需求
 

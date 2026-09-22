@@ -351,10 +351,10 @@ function resolveCodexSpawn(): CodexSpawn {
   return { command: node, argsPrefix: [script], shell: false, wantsStdinPrompt: false }
 }
 
-export type EngineId = 'claude' | 'codex' | 'grok' | 'cursor' | 'opencode' | 'pi' | 'gemini' | 'qwen' | 'antigravity' | 'zcode'
+export type EngineId = 'claude' | 'codex' | 'grok' | 'cursor' | 'opencode' | 'pi' | 'gemini' | 'qwen' | 'antigravity' | 'zcode' | 'hermes'
 
 /** The pairable engine ids, in the daemon's default detection order. */
-export const ENGINE_IDS: EngineId[] = ['claude', 'codex', 'grok', 'cursor', 'opencode', 'pi', 'gemini', 'qwen', 'antigravity', 'zcode']
+export const ENGINE_IDS: EngineId[] = ['claude', 'codex', 'grok', 'cursor', 'opencode', 'pi', 'gemini', 'qwen', 'antigravity', 'zcode', 'hermes']
 
 /** Engines for which Cumora can impose a fail-closed filesystem + tool-network
  * boundary non-interactively. The remaining adapters still work for operators
@@ -2542,7 +2542,8 @@ function resolveGrokBin(env: NodeJS.ProcessEnv = process.env): string | null {
 
 type AcpMsg = {
   jsonrpc?: string
-  id?: number
+  /** Our own requests use numbers; an agent→client request may use either. */
+  id?: number | string
   method?: string
   result?: { sessionId?: unknown }
   error?: { message?: unknown }
@@ -3024,12 +3025,50 @@ interface AcpEngineProfile {
   id: EngineId
   resolveSpawn(env: NodeJS.ProcessEnv): { command: string; args: string[]; shell: boolean }
   missingSessionRe: RegExp
+  /** How to answer the engine's `session/request_permission`. 'approve' is
+   *  only for an engine whose process Cumora itself confines (Hermes runs in
+   *  a container that mounts nothing but the agent's own directories); every
+   *  other engine gets an immediate rejection instead of an unanswered
+   *  request that stalls the turn until the engine's own timeout. */
+  permissions: AcpPermissionPolicy
 }
+
+type AcpPermissionPolicy = 'approve' | 'reject'
 
 const ZCODE_ACP: AcpEngineProfile = {
   id: 'zcode',
   resolveSpawn: resolveZcodeAcpSpawn,
   missingSessionRe: ZCODE_MISSING_SESSION_RE,
+  permissions: 'reject',
+}
+
+/** The reply to one agent→client ACP request. Cumora advertises no fs or
+ *  terminal capability, so the only request it answers is
+ *  `session/request_permission`; anything else gets JSON-RPC "method not
+ *  found" rather than silence, which is what used to hang a turn.
+ *
+ *  Approval picks `allow_once` over `allow_always` so nothing persists in the
+ *  engine's own state — the decision is re-made, by the same policy, on every
+ *  request. With no option of the wanted kind the answer is `cancelled`,
+ *  which ACP defines as "not granted". */
+export function answerAcpClientRequest(
+  method: string,
+  params: Record<string, unknown> | undefined,
+  policy: AcpPermissionPolicy,
+): { result: Record<string, unknown> } | { error: { code: number; message: string } } {
+  if (method !== 'session/request_permission') {
+    return { error: { code: -32601, message: `cumora-daemon does not handle ${method}` } }
+  }
+  const options = Array.isArray(params?.options) ? params.options as Array<Record<string, unknown>> : []
+  const pick = (kind: string) => options.find((o) => o?.kind === kind && typeof o.optionId === 'string')
+  const chosen = policy === 'approve'
+    ? pick('allow_once') ?? pick('allow_always')
+    : pick('reject_once') ?? pick('reject_always')
+  return {
+    result: {
+      outcome: chosen ? { outcome: 'selected', optionId: chosen.optionId } : { outcome: 'cancelled' },
+    },
+  }
 }
 
 /** Hook surface the connection exposes upward. The connection owns only wire
@@ -3038,6 +3077,9 @@ interface AcpRpcConnectionHooks {
   onLog: (line: string) => void
   /** Server→client notifications; unrecognized methods are the hook's to ignore. */
   onNotification: (msg: AcpMsg) => void
+  /** Server→client requests (they carry an id and expect a reply). The
+   *  connection writes whatever this returns back as the response. */
+  onRequest: (msg: AcpMsg & { method: string; id: number | string }) => ReturnType<typeof answerAcpClientRequest>
   /** Process death, fired exactly once. In-flight rpc() calls have already
    *  been rejected when it fires. */
   onDeath: (exitCode: number, why: string) => void
@@ -3167,12 +3209,27 @@ class AcpRpcConnection {
       let msg: AcpMsg | null = null
       try { msg = JSON.parse(t) as AcpMsg } catch { msg = null }
       if (!msg) { const c = cleanLine(line); if (c) this.hooks.onLog(c); continue }
-      if (msg.id !== undefined) {
+      if (msg.id !== undefined && typeof msg.method === 'string') {
+        this.answer(msg as AcpMsg & { method: string; id: number | string })
+        continue
+      }
+      if (typeof msg.id === 'number') {
         const waiter = this.waiters.get(msg.id)
         if (waiter) { this.waiters.delete(msg.id); waiter(msg); continue }
       }
       this.hooks.onNotification(msg)
     }
+  }
+
+  /** Reply to an agent→client request. A hook that throws still produces an
+   *  answer — an unanswered request is exactly the stall this exists to end. */
+  private answer(msg: AcpMsg & { method: string; id: number | string }): void {
+    let reply: ReturnType<typeof answerAcpClientRequest>
+    try { reply = this.hooks.onRequest(msg) } catch (err) {
+      reply = { error: { code: -32603, message: err instanceof Error ? err.message : String(err) } }
+    }
+    if (this.dead) return
+    writeStdin(this.child, JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...reply }) + '\n')
   }
 
   private absorbSessionId(msg: AcpMsg): void {
@@ -3229,6 +3286,16 @@ class AcpEngineSession implements EngineSession {
       {
         onLog: (line) => this.onLog(line),
         onNotification: (msg) => this.onUpdate(msg),
+        onRequest: (msg) => {
+          const reply = answerAcpClientRequest(msg.method, msg.params, profile.permissions)
+          const tool = (msg.params?.toolCall as { title?: unknown } | undefined)?.title
+          const what = typeof tool === 'string' ? ` for ${tool.slice(0, 120)}` : ''
+          const outcome = 'result' in reply
+            ? String((reply.result.outcome as { optionId?: unknown; outcome?: unknown }).optionId ?? (reply.result.outcome as { outcome?: unknown }).outcome)
+            : `error ${reply.error.code}`
+          this.onLog(`[${profile.id}] ${msg.method}${what} → ${outcome}`)
+          return reply
+        },
         onDeath: (code, why) => this.onDeath(code, why),
         onLoadFallback: (why) => {
           this.onLog(`[${profile.id}] session/load failed (${why}) — starting a fresh session`)
@@ -3290,7 +3357,7 @@ class AcpEngineSession implements EngineSession {
     // running turn. The daemon coalesces the ping onto the next wake instead.
     if (!this.steerWarned) {
       this.steerWarned = true
-      this.log('[zcode] same-turn steer is not supported on ACP stdio — the ping rides the next wake')
+      this.log(`[${this.profile.id}] same-turn steer is not supported on ACP stdio — the ping rides the next wake`)
     }
   }
 
@@ -3455,6 +3522,124 @@ class ZcodeAdapter implements EngineAdapter {
         ? 'aborted (timeout)'
         : err instanceof Error ? err.message : String(err)
       return { ok: false, detail: `zcode bridge handshake failed: ${why}`.slice(0, 240) }
+    } finally {
+      await session.stop({ force: true })
+    }
+  }
+}
+
+// ─── hermes ───────────────────────────────────────────────────────────────
+//
+// Hermes Agent (Nous Research) speaks ACP over stdio through its `hermes-acp`
+// entry point, so it rides the same AcpEngineSession as ZCode. What differs is
+// WHERE it runs: never on the host. The adapter spawns a wrapper script —
+// deploy/orbstack/hermes/hermes-acp-container in this repo, found on PATH as
+// `hermes-acp-container` or pinned with CUMORA_HERMES_ACP_BIN — that pipes
+// stdio into `hermes-acp` inside a container mounting only the agent's home,
+// its IPC directory and a per-agent state volume. A `hermes` binary on the
+// host PATH is deliberately NOT what makes the engine "installed": running it
+// there would put Hermes's own tools (shell, browser, files) on the Mac.
+//
+// That container is also why this is the one profile that APPROVES ACP
+// permission requests. Hermes asks before every tool call — including the
+// `cumora reply` that posts its message — and the boundary those tools run
+// inside is the container, not the answer to the prompt. It remains a
+// compatibility engine all the same: Cumora cannot verify what the wrapper
+// actually runs, so pairing it requires CUMORA_BYOA_ALLOW_UNSANDBOXED=hermes
+// (or =1), exactly like the other unsandboxed engines.
+//
+// Hermes reads AGENTS.md from the session cwd as project context; its own
+// skills live in the container's state volume, and .agents/skills/ in the
+// agent home is seeded for parity with the other AGENTS.md engines.
+
+const HERMES_ACP_WRAPPER = 'hermes-acp-container'
+
+/** The operator-pinned wrapper, when CUMORA_HERMES_ACP_BIN names a file that
+ *  exists. Detection counts this as installed even off PATH. */
+function resolveHermesAcpBin(env: NodeJS.ProcessEnv = process.env): string | null {
+  const explicit = env.CUMORA_HERMES_ACP_BIN?.trim()
+  return explicit && existsSync(explicit) ? explicit : null
+}
+
+function resolveHermesAcpSpawn(env: NodeJS.ProcessEnv): { command: string; args: string[]; shell: boolean } {
+  const explicit = resolveHermesAcpBin(env)
+  if (explicit) return { command: explicit, args: [], shell: false }
+  const wrapper = resolveSpawn(HERMES_ACP_WRAPPER)
+  return { command: wrapper.command, args: [], shell: wrapper.shell }
+}
+
+const HERMES_ACP: AcpEngineProfile = {
+  id: 'hermes',
+  resolveSpawn: resolveHermesAcpSpawn,
+  missingSessionRe: /session not found|no such session|unknown session|session is not active/i,
+  permissions: 'approve',
+}
+
+class HermesAdapter implements EngineAdapter {
+  readonly id = 'hermes' as const
+  readonly bin = HERMES_ACP_WRAPPER
+
+  async seedHome(home: string, persona: EnginePersona): Promise<void> {
+    await ensureCommonHome(home)
+    await mkdir(join(home, '.agents', 'skills'), { recursive: true })
+    await atomicAgentWrite(
+      join(home, 'AGENTS.md'),
+      PERSONA_HEADER(persona, { personaFile: 'AGENTS.md', skillsDir: '.agents/skills/' }),
+    )
+  }
+
+  run(args: EngineRunArgs): Promise<EngineRunResult> {
+    return runAcpTurn(HERMES_ACP, {
+      cwd: args.home,
+      env: args.env,
+      prompt: args.prompt,
+      model: args.model,
+      signal: args.signal,
+      onLog: args.onLog,
+      onHopUsage: args.onHopUsage,
+    })
+  }
+
+  startSession(args: EngineSessionArgs): EngineSession | null {
+    return new AcpEngineSession(HERMES_ACP, args.home, args.env, args)
+  }
+
+  classify(args: EngineClassifyArgs): Promise<EngineClassifyResult> {
+    // A fresh container per triage: seconds of cold start, but the only way
+    // to keep a classify turn off the long-lived session's context.
+    return runAcpTurn(HERMES_ACP, {
+      cwd: args.cwd,
+      env: args.env,
+      prompt: args.prompt,
+      model: args.model,
+      signal: args.signal,
+      onLog: args.onLog,
+    })
+  }
+
+  probe(args: EngineProbeArgs): Promise<EngineClassifyResult> {
+    // The model is whatever the wrapper's config.yaml points at (a local LM
+    // Studio by default), so both tiers probe the same thing.
+    return runAcpTurn(HERMES_ACP, { cwd: args.cwd, env: args.env, prompt: DOCTOR_PROMPT, signal: args.signal })
+  }
+
+  async probeWake(args: EngineWakeProbeArgs): Promise<EngineWakeProbeResult> {
+    const session = new AcpEngineSession(HERMES_ACP, args.cwd, args.env, {
+      home: args.cwd,
+      env: args.env,
+      standingPrompt: null,
+      resumeSessionId: null,
+      onLog: () => {},
+      signal: args.signal,
+    })
+    try {
+      await session.whenReady()
+      return { ok: true, detail: '' }
+    } catch (err) {
+      const why = args.signal.aborted
+        ? 'aborted (timeout)'
+        : err instanceof Error ? err.message : String(err)
+      return { ok: false, detail: `hermes container handshake failed: ${why}`.slice(0, 240) }
     } finally {
       await session.stop({ force: true })
     }
@@ -5878,6 +6063,7 @@ const ADAPTERS: Record<EngineId, EngineAdapter> = {
   qwen: new QwenAdapter(),
   antigravity: new AntigravityAdapter(),
   zcode: new ZcodeAdapter(),
+  hermes: new HermesAdapter(),
 }
 
 export function getAdapter(id: EngineId): EngineAdapter {
@@ -5897,7 +6083,9 @@ export async function detectEnginesWithStatus(): Promise<EngineDetection> {
   const ids = Object.keys(ADAPTERS) as EngineId[]
   const probes = await Promise.all(ids.map(async (id) => {
     const status = await probeBinOnPath(ADAPTERS[id].bin)
-    const installed = status === 'present' || (id === 'grok' && resolveGrokBin() != null)
+    const installed = status === 'present'
+      || (id === 'grok' && resolveGrokBin() != null)
+      || (id === 'hermes' && resolveHermesAcpBin() != null)
     return { id, installed, status }
   }))
   return {
@@ -5940,7 +6128,9 @@ export async function snapshotDetectedEngines(ids?: readonly EngineId[]): Promis
     const bin = ADAPTERS[id].bin
     const path = id === 'grok'
       ? (resolveGrokBin() ?? await resolveBinPath(bin))
-      : await resolveBinPath(bin)
+      : id === 'hermes'
+        ? (resolveHermesAcpBin() ?? await resolveBinPath(bin))
+        : await resolveBinPath(bin)
     return { id, bin, path }
   }))
 }
@@ -6068,7 +6258,8 @@ export async function runEngineDoctor(opts?: {
   const ids = opts?.engines ?? Object.keys(ADAPTERS) as EngineId[]
   return Promise.all(ids.map(async (id): Promise<EngineHealth> => {
     const adapter = ADAPTERS[id]
-    const path = (await resolveBinPath(adapter.bin)) ?? (id === 'grok' ? resolveGrokBin(env) : null)
+    const path = (await resolveBinPath(adapter.bin))
+      ?? (id === 'grok' ? resolveGrokBin(env) : id === 'hermes' ? resolveHermesAcpBin(env) : null)
     if (!path) return { id, installed: false, path: null, big: null, small: null, wake: null }
     const probeTier = async (tier: 'big' | 'small'): Promise<BrainHealth> => {
       const controller = new AbortController()
