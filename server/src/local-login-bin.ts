@@ -4,6 +4,8 @@
  *   tsx server/src/local-login-bin.ts login        --email <email> [--name <name>]
  *   tsx server/src/local-login-bin.ts pair-code    --email <email>
  *   tsx server/src/local-login-bin.ts set-language --email <email> [--language <text>]
+ *   tsx server/src/local-login-bin.ts create-agent --email <email> --name <name>
+ *       [--role <role>] [--bio <bio>] --prompt-file <path> [--engine <id>]
  *
  * `login` finds or creates the user through the same find-or-create path the
  * OAuth callback uses (a new user gets a personal workspace, and an email on
@@ -145,12 +147,71 @@ async function setLanguage(argv: string[]): Promise<void> {
   process.stdout.write(`${rows.length}\n`)
 }
 
+/** Create an agent on this workspace's own paired computer.
+ *
+ *  Goes through the server's own `POST /api/agents` rather than writing the
+ *  rows here: that endpoint also joins #all-hands, seeds IDENTITY.md / SOUL.md,
+ *  opens the 1:1 conversation and kicks off the portrait. A session is minted
+ *  for the operator, used in-process, and deleted again — it never leaves this
+ *  process. */
+async function createAgent(argv: string[]): Promise<void> {
+  const email = requireEmail(argv)
+  const name = flag(argv, 'name')?.trim()
+  if (!name) throw new Error('--name <name> is required')
+  const promptFile = flag(argv, 'prompt-file')
+  const prompt = promptFile
+    ? await (await import('node:fs/promises')).readFile(promptFile, 'utf8')
+    : flag(argv, 'prompt') ?? ''
+  if (prompt.trim().length < 10) throw new Error('--prompt-file <path> (or --prompt) is required')
+  const { userId, companyId } = await ownedWorkspace(email)
+
+  // Free tier can only place agents on a paired computer, never Cumora Cloud.
+  const { rows: computers } = await pool.query<{ id: string; name: string; status: string }>(
+    `SELECT id, name, status FROM computers
+      WHERE company_id = $1 AND kind IN ('local', 'vps')
+      ORDER BY (status = 'online') DESC, last_seen_at DESC NULLS LAST
+      LIMIT 1`,
+    [companyId],
+  )
+  const computer = computers[0]
+  if (!computer) throw new Error('no paired computer in this workspace — run ./pair.sh first')
+
+  const ua = 'cumora-local-admin-cli'
+  const { token } = await createSession(userId, { ua })
+  try {
+    const res = await fetch(`http://127.0.0.1:${env.PORT}/api/agents`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-company-id': companyId,
+      },
+      body: JSON.stringify({
+        name,
+        role: flag(argv, 'role')?.trim() || undefined,
+        bio: flag(argv, 'bio')?.trim() || undefined,
+        systemPrompt: prompt.trim(),
+        computerId: computer.id,
+        engine: flag(argv, 'engine')?.trim() || undefined,
+        inherit: !flag(argv, 'engine'),
+      }),
+    })
+    const payload = await res.json().catch(() => ({})) as { id?: string; error?: string }
+    if (!res.ok) throw new Error(`POST /api/agents ${res.status}: ${payload.error ?? '(no detail)'}`)
+    console.error(`[local-login] created agent ${payload.id} (${name}) on ${computer.name} [${computer.status}]`)
+    process.stdout.write(`${payload.id ?? ''}\n`)
+  } finally {
+    await pool.query(`DELETE FROM sessions WHERE user_id = $1 AND user_agent = $2`, [userId, ua])
+  }
+}
+
 async function main(): Promise<void> {
   const [command, ...argv] = process.argv.slice(2)
   if (command === 'login') await login(argv)
   else if (command === 'pair-code') await pairCode(argv)
   else if (command === 'set-language') await setLanguage(argv)
-  else throw new Error('usage: local-login-bin.ts login --email <email> [--name <name>] | pair-code --email <email> | set-language --email <email> [--language <text>]')
+  else if (command === 'create-agent') await createAgent(argv)
+  else throw new Error('usage: local-login-bin.ts login --email <email> [--name <name>] | pair-code --email <email> | set-language --email <email> [--language <text>] | create-agent --email <email> --name <name> --prompt-file <path>')
 }
 
 let exitCode = 0
