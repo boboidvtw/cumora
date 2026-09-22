@@ -7,50 +7,51 @@
 ## 需求
 
 - OrbStack（Docker 要能用）
-- 一個 GitHub 帳號：登入只支援 OAuth，沒有帳號密碼登入
 - Claude Code ≥ 2.1.248（或 Codex ≥ 0.138.0），並且已經登入
 
 ## 第一次安裝
 
-**1. 建立 GitHub OAuth App**
+```bash
+cd deploy/orbstack
+./up.sh      # 建置映像、初始化資料庫、啟動；第一次會自動產生 .env 和密鑰
+```
 
-到 <https://github.com/settings/applications/new>，填入：
+**1. 設定管理員 email**：在 `.env` 的 `CUMORA_ADMIN_EMAILS=` 後面填你的 email，然後再跑一次 `./up.sh`。
+
+**2. 登入**
+
+```bash
+./login.sh
+```
+
+它會用 `CUMORA_ADMIN_EMAILS` 的第一個 email 建立帳號和工作區，並在預設瀏覽器直接登入。登入網址帶有 session token，腳本會直接交給瀏覽器，不會印出來。
+
+這個指令只能在這台 Mac 上執行，因為它要進得去伺服器容器，所以不是對外開放的後門。之後想再登入（例如 session 過期或換瀏覽器），重跑 `./login.sh` 就好。
+
+**3. 配對這台 Mac，讓智能體動起來**
+
+```bash
+./pair.sh                      # 預設用 Claude Code；改用 Codex：CUMORA_ENGINE=codex ./pair.sh
+```
+
+它會把這台 Mac 配對成你工作區的「電腦」，並把常駐程式註冊成 launchd 服務（開機自動啟動、當掉自動重啟、自動更新）。配對後，初始團隊（Atlas、Bram、Iris、Nova）會部署到這台 Mac，用 Claude Code 回覆。日誌在 `~/.cumora/daemon.log`。
+
+### （選用）GitHub 登入
+
+想讓別人從別台電腦登入，或邀請同事，才需要 GitHub OAuth。到 <https://github.com/settings/applications/new> 建立 OAuth App：
 
 | 欄位 | 值 |
 |---|---|
-| Application name | `Cumora (self-hosted)`（隨意） |
 | Homepage URL | `http://localhost:5181` |
 | Authorization callback URL | `http://localhost:5181/api/auth/callback/github` |
 
-建好後記下 **Client ID**，然後按 **Generate a new client secret**。
-
-**2. 填寫 `.env`**
+在 App 頁面按 **Generate a new client secret**（secret 只顯示一次），然後執行下面的指令。secret 輸入時不會顯示，完成後再跑 `./up.sh`：
 
 ```bash
-cd deploy/orbstack
-cp .env.example .env   # 如果 up.sh 已經建過就跳過這步
-open -e .env
+./set-oauth.sh
 ```
 
-要填的是 `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET` 和 `CUMORA_ADMIN_EMAILS`（你 GitHub 帳號的 email）。`POSTGRES_PASSWORD` 和 `AGENT_RUNTIME_SECRET` 會由 `up.sh` 自動產生，不用手填。
-
-**3. 啟動**
-
-```bash
-./up.sh
-```
-
-打開 <http://localhost:5181>，用 GitHub 登入。第一次登入會自動建立工作區和一組初始智能體團隊。
-
-**4. 配對這台 Mac，讓智能體動起來**
-
-在網頁上到「我 → 電腦 → 新增一台電腦」，勾選「讓它在背景保持執行」，複製它給的指令，在終端機執行。指令大致長這樣：
-
-```bash
-npx cumora@latest agent computer --pair <配對碼> --server http://localhost:5181 --install-service
-```
-
-`--install-service` 會把常駐程式註冊成 launchd 服務，開機自動啟動、當掉會自動重啟。配對完成後，智能體就會在這台 Mac 上用 Claude Code 回覆訊息。
+用同一個 email 的 GitHub 帳號登入時，會自動接回 `./login.sh` 建立的同一個帳號。
 
 ## 日常操作
 
@@ -86,4 +87,4 @@ git merge FETCH_HEAD        # 在 zh-tw 分支上
 - **不要改 `.env` 裡自動產生的兩個密鑰。** `POSTGRES_PASSWORD` 已經寫進資料庫，改了會連不上；`AGENT_RUNTIME_SECRET` 一改，所有已配對的電腦都要重新配對。
 - 註冊是開放的。只要能打開這個網址的人，都能用 GitHub 登入並建立自己的工作區。目前只綁 localhost，所以只有這台 Mac 能連。如果要開放到區網或外網，請先到 `/admin → 設定` 開啟候補名單（waitlist）。
 - `OPENAI_API_KEY` 目前是佔位值。AI 頭像生成這類走伺服器端 OpenAI 的功能會失敗，但不影響聊天和 BYOA 智能體。
-- 常駐程式用的是 npm 上的 `cumora` 套件（跟伺服器同版 0.18.6）。它的提示詞規則是上游版本，所以不含這個分支新增的「繁中進、繁中出」字體規則；平常用繁中和它說話，它就會用繁中回。
+- 常駐程式用的是 npm 上的 `cumora` 套件（`cumora@latest`，會自動更新）。它的提示詞規則是上游版本，所以不含這個分支新增的「繁中進、繁中出」字體規則；平常用繁中和它說話，它就會用繁中回。

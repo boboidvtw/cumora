@@ -409,7 +409,9 @@ export async function completeFlow(
 const APPLE_SIGNUP_TRIAL_DAYS = 7
 
 export async function findOrCreateUserByProfile(
-  p: Provider,
+  /** `local` = the operator-only sign-in (local-login-bin.ts); it only ever
+   *  lands in user_identities / the waitlist row, never in a provider flow. */
+  p: Provider | 'local',
   profile: NormalizedProfile,
   inviteToken: string | null = null,
   /** Grant the Apple-signup Pro trial when this is a brand-new user.

@@ -33,7 +33,7 @@ for key in GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET; do
   grep -q "^${key}=..*" .env || missing="$missing $key"
 done
 if [ -n "$missing" ]; then
-  echo "警告：.env 還沒填$missing —— 服務會啟動，但登入頁不會出現 GitHub 登入按鈕。" >&2
+  echo "提示：.env 沒有設定$missing，登入頁的 GitHub 登入不能用；在這台 Mac 上請改用 ./login.sh 登入。" >&2
 fi
 
 docker compose build
