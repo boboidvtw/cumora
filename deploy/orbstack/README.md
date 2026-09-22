@@ -53,6 +53,24 @@ cd deploy/orbstack
 
 用同一個 email 的 GitHub 帳號登入時，會自動接回 `./login.sh` 建立的同一個帳號。
 
+## 讓智能體讀你的專案
+
+預設情況下，每位智能體只看得到自己的家目錄（`~/.cumora/agents/<id>`），看不到你 Mac 上任何其他檔案。要讓它們讀你的專案，換成用這個 repo 自己建的常駐程式：
+
+```bash
+./install-local-daemon.sh                      # 開放 ~/Projects
+CUMORA_AGENT_READ_PATHS=~/code ./install-local-daemon.sh
+./install-local-daemon.sh --uninstall          # 回到官方 npm 版
+```
+
+它會把 npm 版的服務換成指向這個 repo 的 launchd 服務，並把 `CUMORA_AGENT_READ_PATHS` 列出的目錄加進 Claude 的沙箱白名單和 `--add-dir`。
+
+- **只能讀，不能寫。** 沙箱仍然把寫入限制在智能體自己的家目錄，實測在 `~/Projects` 下建檔會失敗。
+- **機密檔案一律擋掉。** `.env`、`*.pem`、`*.key`、`id_rsa*`、`.ssh/`、`.aws/`、`.npmrc` 這類檔案就算在開放目錄裡也讀不到（`engine.ts` 的 `SECRET_FILE_GLOBS`）。注意規則必須寫成 `//**/.env` 這種雙斜線形式，單斜線只比對工作目錄，模型用絕對路徑就會繞過。
+- **代價：不再自動更新。** 同步上游之後要重跑一次 `./install-local-daemon.sh`。
+
+官方 npm 版常駐程式沒有這個設定，它唯一的放寬開關是 `CUMORA_BYOA_ALLOW_UNSANDBOXED=1`，那會整個關掉沙箱（模型可讀全機檔案、可連網），不建議用。
+
 ## 日常操作
 
 ```bash

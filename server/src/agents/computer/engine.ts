@@ -27,7 +27,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { access, lstat, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { basename, dirname, join, delimiter as PATH_DELIMITER } from 'node:path'
+import { basename, dirname, isAbsolute, join, delimiter as PATH_DELIMITER } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { stripLoneSurrogates } from '../text-safety.js'
 import { isCustomAnthropicEndpoint, readClaudeUserSettings, withClaudeUserSettingsEnv } from './claude-user-settings.js'
@@ -1489,6 +1489,60 @@ const TOOL_ENV_ALLOWLIST = new Set([
   'SYSTEMROOT', 'COMSPEC', 'PATHEXT', 'WINDIR',
 ])
 
+/** Files that are never worth reading and always worth leaking: env files,
+ *  private keys, cloud and registry credentials. Denied by name wherever they
+ *  live, because the moment an operator points CUMORA_AGENT_READ_PATHS at a
+ *  real project tree, a `.env` sitting in it is one `cumora reply` away from
+ *  the chat room. Deny rules beat allow rules in Claude's permission model. */
+const SECRET_FILE_GLOBS = [
+  '.env', '.env.*', '*.pem', '*.key', '*.p12', '*.keystore',
+  'id_rsa*', 'id_ed25519*', 'id_ecdsa*',
+  '.ssh/**', '.aws/**', '.gnupg/**',
+  '.npmrc', '.pypirc', '.netrc',
+  'credentials.json', 'service-account*.json',
+]
+
+/** Both spellings of each glob. A single leading slash is workspace-relative
+ *  in Claude's permission syntax, so a one-slash pattern silently misses a file
+ *  the model opens by absolute path — exactly what an --add-dir project tree
+ *  invites. A double leading slash anchors at the filesystem root and does
+ *  match; the relative form still covers the agent's own home. Verified
+ *  against claude 2.1.270: reading a project `.env` by absolute path came back
+ *  READABLE with the one-slash rule and BLOCKED with the two-slash rule. */
+const SECRET_READ_DENY = SECRET_FILE_GLOBS.flatMap((glob) => [
+  `Read(**/${glob})`, `Read(//**/${glob})`,
+  `Edit(**/${glob})`, `Edit(//**/${glob})`,
+])
+
+/** The deny rules above, for tests and for anyone auditing what is blocked. */
+export function secretReadDenyRules(): readonly string[] {
+  return SECRET_READ_DENY
+}
+
+/** Extra directories the agent may READ, from `CUMORA_AGENT_READ_PATHS`
+ *  (PATH-style separated, e.g. `/Users/me/Projects:/srv/code`).
+ *
+ *  Self-hosting operators use this to let their agents read a real project
+ *  tree instead of only their own home. It stays fail-closed: only existing
+ *  absolute directories survive, so a typo silently widens nothing, and it
+ *  grants READS only — the sandbox's write confinement and the Bash /
+ *  network denials are untouched. Empty (the default) means the agent sees
+ *  nothing but its own home, as before. */
+export function extraAgentReadPaths(env: NodeJS.ProcessEnv): string[] {
+  const raw = env.CUMORA_AGENT_READ_PATHS?.trim()
+  if (!raw) return []
+  const seen = new Set<string>()
+  for (const entry of raw.split(PATH_DELIMITER)) {
+    const path = entry.trim()
+    if (!path || !isAbsolute(path)) continue
+    try {
+      if (!statSync(path).isDirectory()) continue
+      seen.add(realpathSync(path))
+    } catch { /* missing or unreadable — skip it rather than widen blindly */ }
+  }
+  return [...seen]
+}
+
 function claudeSecureSettings(agentHome: string, env: NodeJS.ProcessEnv): string {
   const deniedEnv = Object.keys(env)
     .filter((name) => !TOOL_ENV_ALLOWLIST.has(name.toUpperCase()) && !name.toUpperCase().startsWith('LC_'))
@@ -1505,7 +1559,7 @@ function claudeSecureSettings(agentHome: string, env: NodeJS.ProcessEnv): string
     .split(PATH_DELIMITER)
     .filter(Boolean)
   pathDirs.push(dirname(process.execPath))
-  const allowRead = [...new Set([agentHome, ...pathDirs])]
+  const allowRead = [...new Set([agentHome, ...pathDirs, ...extraAgentReadPaths(env)])]
   return JSON.stringify({
     ...readClaudeUserSettings(env).turnSettings,
     permissions: {
@@ -1516,7 +1570,10 @@ function claudeSecureSettings(agentHome: string, env: NodeJS.ProcessEnv): string
       allow: ['Read(/**)', 'Edit(/**)', 'mcp__cumora__cli'],
       // The MCP bridge runs as a trusted daemon helper outside the command
       // sandbox. The model must never rewrite either helper executable.
-      deny: ['Read(/bin/**)', 'Edit(/bin/**)', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch'],
+      deny: [
+        'Read(/bin/**)', 'Edit(/bin/**)', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch',
+        ...SECRET_READ_DENY,
+      ],
     },
     sandbox: {
       enabled: true,
@@ -1550,8 +1607,12 @@ function claudeSecureMcpConfig(env: NodeJS.ProcessEnv): string {
 }
 
 function claudeSecureFlags(agentHome: string, env: NodeJS.ProcessEnv): string[] {
+  // --add-dir mirrors the sandbox allowRead widening: the sandbox decides what
+  // the process may read, --add-dir decides what the file tools will look at.
+  const addDirs = extraAgentReadPaths(env).flatMap((path) => ['--add-dir', path])
   return [
     '--restricted',
+    ...addDirs,
     '--permission-mode', 'dontAsk',
     '--tools', 'Read,Write,Edit,Glob,Grep,mcp__cumora__cli',
     '--disallowedTools', 'Bash,PowerShell,WebFetch,WebSearch',
