@@ -6,6 +6,8 @@
  *   tsx server/src/local-login-bin.ts set-language --email <email> [--language <text>]
  *   tsx server/src/local-login-bin.ts create-agent --email <email> --name <name>
  *       [--role <role>] [--bio <bio>] --prompt-file <path> [--engine <id>]
+ *   tsx server/src/local-login-bin.ts set-persona  --email <email> --agent <id>
+ *       [--role <role>] [--bio <bio>] --prompt-file <path>
  *
  * `login` finds or creates the user through the same find-or-create path the
  * OAuth callback uses (a new user gets a personal workspace, and an email on
@@ -154,6 +156,62 @@ async function setLanguage(argv: string[]): Promise<void> {
  *  opens the 1:1 conversation and kicks off the portrait. A session is minted
  *  for the operator, used in-process, and deleted again — it never leaves this
  *  process. */
+/** Run one authenticated call as the operator. The session lives only for the
+ *  duration of the call and is deleted afterwards, so nothing leaks to disk. */
+async function asOperator<T>(
+  userId: string,
+  companyId: string,
+  run: (request: (path: string, init: RequestInit) => Promise<unknown>) => Promise<T>,
+): Promise<T> {
+  const ua = 'cumora-local-admin-cli'
+  const { token } = await createSession(userId, { ua })
+  try {
+    return await run(async (path, init) => {
+      const res = await fetch(`http://127.0.0.1:${env.PORT}${path}`, {
+        ...init,
+        headers: {
+          ...(init.headers ?? {}),
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'x-company-id': companyId,
+        },
+      })
+      const payload = await res.json().catch(() => ({})) as { error?: string } & Record<string, unknown>
+      if (!res.ok) throw new Error(`${init.method ?? 'GET'} ${path} ${res.status}: ${payload.error ?? '(no detail)'}`)
+      return payload
+    })
+  } finally {
+    await pool.query(`DELETE FROM sessions WHERE user_id = $1 AND user_agent = $2`, [userId, ua])
+  }
+}
+
+/** Rewrite an existing agent's persona (style, role, bio) from a file.
+ *  PUT /api/agents/:id also invalidates the persona cache, and the daemon
+ *  rebuilds that agent's runner when its system prompt changes. Re-run
+ *  `set-language` afterwards: this replaces the whole prompt, language block
+ *  included. */
+async function setPersona(argv: string[]): Promise<void> {
+  const email = requireEmail(argv)
+  const agentId = flag(argv, 'agent')?.trim()
+  if (!agentId) throw new Error('--agent <id> is required')
+  const promptFile = flag(argv, 'prompt-file')
+  const prompt = promptFile
+    ? await (await import('node:fs/promises')).readFile(promptFile, 'utf8')
+    : flag(argv, 'prompt') ?? ''
+  if (prompt.trim().length < 10) throw new Error('--prompt-file <path> (or --prompt) is required')
+  const { userId, companyId } = await ownedWorkspace(email)
+  await asOperator(userId, companyId, (request) => request(`/api/agents/${encodeURIComponent(agentId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      systemPrompt: prompt.trim(),
+      role: flag(argv, 'role')?.trim() || undefined,
+      bio: flag(argv, 'bio')?.trim() || undefined,
+    }),
+  }))
+  console.error(`[local-login] persona updated for ${agentId}`)
+  process.stdout.write(`${agentId}\n`)
+}
+
 async function createAgent(argv: string[]): Promise<void> {
   const email = requireEmail(argv)
   const name = flag(argv, 'name')?.trim()
@@ -176,33 +234,20 @@ async function createAgent(argv: string[]): Promise<void> {
   const computer = computers[0]
   if (!computer) throw new Error('no paired computer in this workspace — run ./pair.sh first')
 
-  const ua = 'cumora-local-admin-cli'
-  const { token } = await createSession(userId, { ua })
-  try {
-    const res = await fetch(`http://127.0.0.1:${env.PORT}/api/agents`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-        'x-company-id': companyId,
-      },
-      body: JSON.stringify({
-        name,
-        role: flag(argv, 'role')?.trim() || undefined,
-        bio: flag(argv, 'bio')?.trim() || undefined,
-        systemPrompt: prompt.trim(),
-        computerId: computer.id,
-        engine: flag(argv, 'engine')?.trim() || undefined,
-        inherit: !flag(argv, 'engine'),
-      }),
-    })
-    const payload = await res.json().catch(() => ({})) as { id?: string; error?: string }
-    if (!res.ok) throw new Error(`POST /api/agents ${res.status}: ${payload.error ?? '(no detail)'}`)
-    console.error(`[local-login] created agent ${payload.id} (${name}) on ${computer.name} [${computer.status}]`)
-    process.stdout.write(`${payload.id ?? ''}\n`)
-  } finally {
-    await pool.query(`DELETE FROM sessions WHERE user_id = $1 AND user_agent = $2`, [userId, ua])
-  }
+  const created = await asOperator(userId, companyId, (request) => request('/api/agents', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      role: flag(argv, 'role')?.trim() || undefined,
+      bio: flag(argv, 'bio')?.trim() || undefined,
+      systemPrompt: prompt.trim(),
+      computerId: computer.id,
+      engine: flag(argv, 'engine')?.trim() || undefined,
+      inherit: !flag(argv, 'engine'),
+    }),
+  })) as { id?: string }
+  console.error(`[local-login] created agent ${created.id} (${name}) on ${computer.name} [${computer.status}]`)
+  process.stdout.write(`${created.id ?? ''}\n`)
 }
 
 async function main(): Promise<void> {
@@ -211,7 +256,8 @@ async function main(): Promise<void> {
   else if (command === 'pair-code') await pairCode(argv)
   else if (command === 'set-language') await setLanguage(argv)
   else if (command === 'create-agent') await createAgent(argv)
-  else throw new Error('usage: local-login-bin.ts login --email <email> [--name <name>] | pair-code --email <email> | set-language --email <email> [--language <text>] | create-agent --email <email> --name <name> --prompt-file <path>')
+  else if (command === 'set-persona') await setPersona(argv)
+  else throw new Error('usage: local-login-bin.ts login --email <email> [--name <name>] | pair-code --email <email> | set-language --email <email> [--language <text>] | create-agent --email <email> --name <name> --prompt-file <path> | set-persona --email <email> --agent <id> --prompt-file <path>')
 }
 
 let exitCode = 0
