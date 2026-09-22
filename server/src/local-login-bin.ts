@@ -1,8 +1,9 @@
 /**
  * Operator-only local sign-in for a self-hosted, single-machine deployment.
  *
- *   tsx server/src/local-login-bin.ts login     --email <email> [--name <name>]
- *   tsx server/src/local-login-bin.ts pair-code --email <email>
+ *   tsx server/src/local-login-bin.ts login        --email <email> [--name <name>]
+ *   tsx server/src/local-login-bin.ts pair-code    --email <email>
+ *   tsx server/src/local-login-bin.ts set-language --email <email> [--language <text>]
  *
  * `login` finds or creates the user through the same find-or-create path the
  * OAuth callback uses (a new user gets a personal workspace, and an email on
@@ -35,6 +36,7 @@ const { env } = await import('./env.js')
 const { audit, createSession } = await import('./auth.js')
 const { doneUrl, findOrCreateUserByProfile } = await import('./oauth.js')
 const { issuePairingCode } = await import('./agents/computer/registry.js')
+const { invalidatePersonaCache } = await import('./agents/personas.js')
 
 function flag(argv: string[], name: string): string | null {
   const i = argv.indexOf(`--${name}`)
@@ -90,11 +92,65 @@ async function pairCode(argv: string[]): Promise<void> {
   process.stdout.write(`${code}\n`)
 }
 
+/** The workspace this operator owns or administers, oldest membership first. */
+async function ownedWorkspace(email: string): Promise<{ userId: string; companyId: string }> {
+  const { rows } = await pool.query<{ user_id: string; company_id: string }>(
+    `SELECT u.id AS user_id, cm.company_id
+       FROM users u
+       JOIN company_members cm ON cm.user_id = u.id AND cm.role IN ('owner', 'admin')
+      WHERE LOWER(u.email) = $1
+      ORDER BY cm.joined_at ASC
+      LIMIT 1`,
+    [email],
+  )
+  const row = rows[0]
+  if (!row) throw new Error(`no workspace owned by ${email} — run \`login\` first`)
+  return { userId: row.user_id, companyId: row.company_id }
+}
+
+const LANGUAGE_BEGIN = '<!-- cumora:language -->'
+const LANGUAGE_END = '<!-- /cumora:language -->'
+const DEFAULT_LANGUAGE_RULE =
+  '語言：跟這個團隊說話一律用繁體中文，台灣用語（軟體、資料、設定、帳號、影片）。' +
+  '不要用簡體字，也不要用中國大陸的說法。對方用英文寫時才用英文回。'
+
+/** Pin the reply language of every agent in the workspace.
+ *
+ *  Why here and not in the prompt rules: the BYOA daemon ships its own copy of
+ *  AGENT_VOICE_RULES (it is published to npm as `cumora`), so a rule edit in
+ *  this repo does not reach an agent running on the packaged daemon. The
+ *  persona does — participants.system_prompt is served from here, and the
+ *  daemon rewrites the agent's CLAUDE.md / AGENTS.md from it on every start.
+ *
+ *  Idempotent: the block between the markers is replaced, not appended. */
+async function setLanguage(argv: string[]): Promise<void> {
+  const email = requireEmail(argv)
+  const rule = flag(argv, 'language')?.trim() || DEFAULT_LANGUAGE_RULE
+  const { companyId } = await ownedWorkspace(email)
+  const block = `${LANGUAGE_BEGIN}\n${rule}\n${LANGUAGE_END}`
+  const { rows } = await pool.query<{ id: string; name: string }>(
+    `UPDATE participants
+        SET system_prompt = TRIM(BOTH E'\n' FROM
+              CASE
+                WHEN POSITION($2 IN COALESCE(system_prompt, '')) > 0
+                  THEN LEFT(system_prompt, POSITION($2 IN system_prompt) - 1)
+                ELSE COALESCE(system_prompt, '')
+              END) || E'\n\n' || $3
+      WHERE company_id = $1 AND kind = 'agent' AND departed_at IS NULL
+      RETURNING id, name`,
+    [companyId, LANGUAGE_BEGIN, block],
+  )
+  for (const row of rows) invalidatePersonaCache(row.id)
+  console.error(`[local-login] language pinned for ${rows.length} agent(s) in ${companyId}: ${rows.map((r) => r.name).join(', ')}`)
+  process.stdout.write(`${rows.length}\n`)
+}
+
 async function main(): Promise<void> {
   const [command, ...argv] = process.argv.slice(2)
   if (command === 'login') await login(argv)
   else if (command === 'pair-code') await pairCode(argv)
-  else throw new Error('usage: local-login-bin.ts login --email <email> [--name <name>] | pair-code --email <email>')
+  else if (command === 'set-language') await setLanguage(argv)
+  else throw new Error('usage: local-login-bin.ts login --email <email> [--name <name>] | pair-code --email <email> | set-language --email <email> [--language <text>]')
 }
 
 let exitCode = 0
