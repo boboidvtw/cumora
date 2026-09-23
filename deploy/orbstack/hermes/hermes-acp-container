@@ -24,6 +24,13 @@ image=${CUMORA_HERMES_IMAGE:-nousresearch/hermes-agent:latest}
 model=${CUMORA_HERMES_MODEL:-qwen3.8-27b}
 model_base_url=${CUMORA_HERMES_BASE_URL:-http://host.docker.internal:1234/v1}
 context_length=${CUMORA_HERMES_CONTEXT:-65536}
+# One local model serves every call, one at a time, at ~12 tokens/s. Thinking
+# ("reasoning") was 1-3k tokens per tool hop — minutes each — so it is off by
+# default; CUMORA_HERMES_REASONING=low|medium|high turns it back on.
+# Title generation and the smart-approval guardian are extra calls on that same
+# model: titles are never shown (Cumora has its own conversation names) and
+# approval is Cumora's container boundary, not a second model's opinion.
+reasoning=${CUMORA_HERMES_REASONING:-none}
 
 # The daemon's engine-inventory rescan asks for a version; answer from the
 # image, which is what actually runs, without touching any agent's state.
@@ -68,6 +75,13 @@ if ! docker volume inspect "$volume" >/dev/null 2>&1; then
     "  provider: lmstudio" \
     "  base_url: $model_base_url" \
     "  context_length: $context_length" \
+    "agent:" \
+    "  reasoning_effort: $reasoning" \
+    "auxiliary:" \
+    "  title_generation:" \
+    "    enabled: false" \
+    "approvals:" \
+    "  mode: \"off\"" \
     "database:" \
     "  journal_mode: wal" \
   | docker run --rm -i -v "$volume:/opt/data" --entrypoint /bin/sh "$image" \

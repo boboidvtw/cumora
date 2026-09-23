@@ -60,11 +60,31 @@ Hermes 執行工具前會送 ACP `session/request_permission`。常駐程式的�
 
 - 透過 `HermesAdapter` 實跑：Hermes 在容器內用 terminal 與 write_file 寫入掛載的家目錄，回合正常結束並回報用量。
 - 在 App 裡實測（智能體 `hermes`，人設見 `../personas/hermes.md`）：它在 #all-hands 接手一則待回的天氣問題，用 `cumora glance` 看對話、`cumora reply` 發出回覆，查的是 open-meteo 的即時預報。過程中兩次授權請求都自動核准。
-- 本機 27B 模型很慢：這一輪約 18 分鐘，大半花在模型摸索怎麼呼叫 `cumora`。換更快的模型，或把 `context_length` 拿掉用模型宣告的 131k，都會有幫助。
+- 本機 27B 模型很慢：第一輪約 18 分鐘，第二輪（問 AAPL 股價）約 12 分鐘。
+
+## 速度：時間花在哪
+
+從 LM Studio 的 log 看（`~/.lmstudio/server-logs/`）：
+
+| 項目 | 數字 |
+|---|---|
+| 生成速度 | 約 11–12 tokens/秒 |
+| 每一步工具呼叫的輸出 | 1,000–2,900 tokens，幾乎都是模型的「思考」，**每步 1.5–4 分鐘** |
+| 讀提示（有快取時） | 每步只讀新增的 300–1,300 tokens，幾秒 |
+| 讀提示（冷啟動） | 容器重開後整份約 16k tokens 重讀，約 2 分鐘 |
+| 額外的模型呼叫 | 標題生成（30 秒逾時）、每條指令的 smart-approval 審查——同一顆模型、一次只跑一個，會排隊 |
+
+所以 `hermes-acp-container` 新建的設定預設：
+
+- `agent.reasoning_effort: none`：關掉思考。實測同一個 write_file 任務，輸出從 196 降到 43 tokens，後續每步 2 秒左右。要打開：`CUMORA_HERMES_REASONING=low`（這顆模型只分開／關，任何非 none 值都等於開）。
+- `auxiliary.title_generation.enabled: false`：Cumora 有自己的對話名稱，用不到。
+- `approvals.mode: "off"`：審查由容器邊界負責，不必再問一次模型。
+
+這些只寫進**新建**的資料卷。既有智能體要手動加到 `config.yaml`（卷名 `cumora-hermes-<id>`），再重啟常駐程式。
 
 ## 已知狀況
 
-- Hermes 內建的安全掃描會把中文字判為「易混淆 Unicode」而請求授權，這邊會自動核准，但每則中文回覆多一次往返。
+- Hermes 內建的安全掃描會把中文字判為「易混淆 Unicode」而請求授權，這邊會自動核准。`approvals.mode: "off"` 後不再經過模型審查。
 - 模型偶爾混入簡體字（例如「多云」），這是模型本身的問題，人設裡的語言規則只能降低、不能消除。
 
 ## 前置需求
