@@ -110,6 +110,26 @@ export const env = {
    * from a tight loop of identical crashes hammering it.
    */
   ALERT_DEDUPE_MS: Number(process.env.ALERT_DEDUPE_MS ?? 60_000),
+  /**
+   * Script pin for what agents post. 'zh-TW' converts any Simplified Chinese
+   * in a reply to Traditional (Taiwan wording) at the write boundary — see
+   * agents/zh-script.ts. Unset = post exactly what the agent wrote.
+   */
+  AGENT_OUTPUT_SCRIPT: process.env.AGENT_OUTPUT_SCRIPT ?? '',
+  /**
+   * Where agent portraits come from. 'openai' (default) calls the image API
+   * with OPENAI_IMAGE_MODEL; 'local' draws an illustrated SVG on the server
+   * (agents/local-avatar.ts) — no image API, no key, instant.
+   */
+  AVATAR_PROVIDER: process.env.AVATAR_PROVIDER === 'local' ? 'local' as const : 'openai' as const,
+  /**
+   * An OpenAI-compatible Chat Completions server on your own machine (LM
+   * Studio: http://host.docker.internal:1234/v1 from inside Docker). When set,
+   * the avatar's gender-presentation classifier asks this model instead of
+   * the OpenAI key. LOCAL_LLM_MODEL names the loaded model.
+   */
+  LOCAL_LLM_BASE_URL: process.env.LOCAL_LLM_BASE_URL ?? '',
+  LOCAL_LLM_MODEL: process.env.LOCAL_LLM_MODEL ?? '',
   /** Image model for avatar generation. Override with OPENAI_IMAGE_MODEL. */
   OPENAI_IMAGE_MODEL: process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
   /** Background scanner cadence */

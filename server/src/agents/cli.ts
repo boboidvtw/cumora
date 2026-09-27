@@ -175,6 +175,7 @@ import { resolveAs } from './cli-identity.js'
  * once, which is what we have today.
  */
 import { inprocClient as worklogClient } from './runtime/inproc-client.js'
+import { pinAgentOutputScript } from './zh-script.js'
 import type { WorkTaskType, WorklogEntry } from './runtime/client.js'
 import {
   recordSeen, getSeen, recordHold, consumeHold, clearHold,
@@ -1799,7 +1800,7 @@ async function cmdReply(parsed: ParsedArgs): Promise<CliResult> {
   const me = resolveAs(parsed)
   const convoId = parsed.positional[0]
   // Strip any hallucinated <tool_call> XML on the way in too — defense in depth.
-  const body = joinBodyArgs(parsed, 1)
+  const rawBody = joinBodyArgs(parsed, 1)
     .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
     .replace(/<function_call>[\s\S]*?<\/function_call>/gi, '')
     .trim()
@@ -1814,7 +1815,7 @@ async function cmdReply(parsed: ParsedArgs): Promise<CliResult> {
   // quotes would leak content, so the server-side path enforces that too.
   const quoteFlag = parsed.flags.quote ?? parsed.flags.q
   const quotedMessageId = quoteFlag ? String(quoteFlag).trim() : null
-  if (!convoId || (!body && !hasAttachFlag)) {
+  if (!convoId || (!rawBody && !hasAttachFlag)) {
     return err('usage: reply <convo_id> "<body>" [--quote <msg_id>] [--attach <url> | --generate-image "<prompt>" [--size square|wide|tall] | --attach-text "<filename>" "<content>" | --attach-bytes "<filename>" --bytes-b64 "<base64>" [--bytes-mime "<mime>"]]')
   }
 
@@ -1822,6 +1823,9 @@ async function cmdReply(parsed: ParsedArgs): Promise<CliResult> {
   // callers can belong to several companies; for them the conversation id +
   // active participant membership below selects the tenant instead.
   const activeAgentCompanyId = await agentCompany(me)
+  // Only an agent's words get the deployment's script pin (AGENT_OUTPUT_SCRIPT);
+  // a human posting through the CLI is quoted as typed.
+  const body = activeAgentCompanyId ? pinAgentOutputScript(rawBody) : rawBody
 
   // Friendly preflight only. The final INSERT transaction repeats this
   // authorization while holding both the active participant row and the
@@ -3438,8 +3442,8 @@ async function cmdEmailSend(parsed: ParsedArgs, me: string, companyId: string): 
     mintMessageId,
     sanitizeSubject,
   } = await import('../email.js')
-  const subject = sanitizeSubject(unescapeChat(String(parsed.flags.subject ?? '')))
-  const body = unescapeChat(String(parsed.flags.body ?? '')).trim()
+  const subject = pinAgentOutputScript(sanitizeSubject(unescapeChat(String(parsed.flags.subject ?? ''))))
+  const body = pinAgentOutputScript(unescapeChat(String(parsed.flags.body ?? '')).trim())
   if (!toRaw || !subject || !body) {
     return err('usage: email send --to <addr|id>[,...] [--cc <...>] --subject "..." --body "..."')
   }
@@ -3552,7 +3556,7 @@ async function cmdEmailSend(parsed: ParsedArgs, me: string, companyId: string): 
 
 async function cmdEmailReply(parsed: ParsedArgs, me: string, companyId: string): Promise<CliResult> {
   const replyTo = parsed.positional[1]
-  const body = unescapeChat(String(parsed.flags.body ?? '')).trim()
+  const body = pinAgentOutputScript(unescapeChat(String(parsed.flags.body ?? '')).trim())
   if (!replyTo || !body) return err('usage: email reply <message_id> --body "..." [--cc <addr|id>...]')
   const attachmentError = rejectsEmailAttachmentFlags(parsed)
   if (attachmentError) return attachmentError
@@ -5897,8 +5901,8 @@ async function cmdCard(parsed: ParsedArgs): Promise<CliResult> {
 
   if (op === 'comment') {
     const cardId = parsed.positional[1]
-    const body = parsed.positional.slice(2).join(' ').trim()
-      || (typeof parsed.flags.body === 'string' ? unescapeChat(parsed.flags.body) : '')
+    const body = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim()
+      || (typeof parsed.flags.body === 'string' ? unescapeChat(parsed.flags.body) : ''))
     if (!cardId || !body) return err('usage: card comment <card_id> "<body>"')
     const home = await resolveCardBoard(cardId)
     if (!home) return err(`card ${cardId} not found`)

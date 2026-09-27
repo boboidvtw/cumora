@@ -20,6 +20,14 @@ x-server-env: &server-env
   CUMORA_PUBLIC_ORIGIN: ${CUMORA_PUBLIC_ORIGIN:-http://localhost:5181}
   CUMORA_AUTH_DONE_URL: ${CUMORA_PUBLIC_ORIGIN:-http://localhost:5181}/
   CUMORA_AUTH_RETURN_ALLOWLIST: ${CUMORA_PUBLIC_ORIGIN:-http://localhost:5181}/
+  # Convert any Simplified Chinese an agent posts to Traditional (Taiwan
+  # wording); set to empty in .env to post exactly what the model wrote.
+  AGENT_OUTPUT_SCRIPT: ${AGENT_OUTPUT_SCRIPT-zh-TW}
+  # No image API here: portraits are drawn on the server, and the one text
+  # question they need (gender presentation) goes to LM Studio on the host.
+  AVATAR_PROVIDER: ${AVATAR_PROVIDER:-local}
+  LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL-http://host.docker.internal:1234/v1}
+  LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-qwen3.8-27b}
 
 services:
   postgres:

@@ -2813,6 +2813,7 @@ async function inferAgentGender(args: {
 }): Promise<Gender> {
   const { name, role, systemPrompt } = args
   const hashFallback: Gender = (hashStr(name) & 1) === 0 ? 'feminine' : 'masculine'
+  if (env.LOCAL_LLM_BASE_URL) return (await inferAgentGenderLocally(name, role, systemPrompt)) ?? hashFallback
   try {
     const { getTrackedLlmClient } = await import('../agents/llm-ledger.js')
     const client = await getTrackedLlmClient({
@@ -2852,6 +2853,43 @@ ${systemPrompt.slice(0, 500) || '(none)'}`,
     console.warn('[avatar] gender inference failed, falling back to name-hash pick', e)
   }
   return hashFallback
+}
+
+/** The same classification on a local Chat Completions server (LM Studio).
+ *  Local models speak Chat Completions, not the Responses API, and a thinking
+ *  model may wrap its answer in <think>…</think>, so the JSON is fished out of
+ *  the reply rather than trusted as the whole body. Null on any failure. */
+async function inferAgentGenderLocally(name: string, role: string, systemPrompt: string): Promise<Gender | null> {
+  try {
+    const { default: OpenAI } = await import('openai')
+    const client = new OpenAI({
+      apiKey: 'local', baseURL: env.LOCAL_LLM_BASE_URL,
+      // One local model serves every caller in turn; give it time, don't retry.
+      maxRetries: 0, timeout: 120_000,
+    })
+    const r = await client.chat.completions.create({
+      model: env.LOCAL_LLM_MODEL || 'local-model',
+      temperature: 0,
+      max_tokens: 400,
+      messages: [
+        {
+          role: 'system',
+          content: 'Classify the gender presentation of a named persona. Decide primarily by the name\'s cultural convention (Atlas, Bram → masculine; Iris, Maya → feminine); use the role and persona text only to break a tie. Answer "androgynous" only for an abstract codename with no human gender lean. Reply with JSON only: {"gender": "feminine" | "masculine" | "androgynous"}.',
+        },
+        {
+          role: 'user',
+          content: `Name: ${name}\nRole: ${role || '(none)'}\nPersona:\n${systemPrompt.slice(0, 500) || '(none)'}\n\n/no_think`,
+        },
+      ],
+    })
+    const text = (r.choices[0]?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/g, '')
+    const gender = text.match(/"gender"\s*:\s*"(feminine|masculine|androgynous)"/)?.[1]
+    if (gender === 'feminine' || gender === 'masculine' || gender === 'androgynous') return gender
+    console.warn(`[avatar] local model gave no usable gender: ${text.slice(0, 120)}`)
+  } catch (e) {
+    console.warn('[avatar] local gender inference failed, falling back to name-hash pick', e instanceof Error ? e.message : e)
+  }
+  return null
 }
 
 function visualSignatureFor(agentId: string, gender: Gender): {
@@ -3167,6 +3205,11 @@ export async function generateAndPersistAvatar(args: {
     name: a.name, role: a.role ?? '', systemPrompt: styleHint, tenant,
   })
   const visual = visualSignatureFor(id, gender)
+  if (env.AVATAR_PROVIDER === 'local') {
+    const { renderLocalAvatar } = await import('../agents/local-avatar.js')
+    const svg = renderLocalAvatar(visual, hashStr(id))
+    return persistAgentAvatar(id, tenant, Buffer.from(svg, 'utf8'), 'svg', 'image/svg+xml')
+  }
   const genderClause = gender === 'feminine'
     ? `${a.name} is a young woman with softly feminine features and styling — a pretty face, gentle expression, distinctly girlish attire (a dress, soft blouse, pastel knit, or similarly feminine piece). Long or shoulder-length soft hair.`
     : gender === 'masculine'
@@ -3245,8 +3288,16 @@ export async function generateAndPersistAvatar(args: {
     throw new HttpError(502, 'image API returned no image')
   }
 
-  const key = `avatars/avatar-${id}-${randomUUID().slice(0, 8)}.png`
-  const url = await storage.put(key, imageBuf, 'image/png')
+  return persistAgentAvatar(id, tenant, imageBuf, 'png', 'image/png')
+}
+
+/** Store a generated portrait and make it the agent's avatar, telling every
+ *  open client. */
+async function persistAgentAvatar(
+  id: string, tenant: string, bytes: Buffer, ext: 'png' | 'svg', mime: string,
+): Promise<{ url: string }> {
+  const key = `avatars/avatar-${id}-${randomUUID().slice(0, 8)}.${ext}`
+  const url = await storage.put(key, bytes, mime)
   await withOutboxTransaction(async (client) => {
     await client.query(
       `UPDATE participants SET avatar_url = $2 WHERE id = $1 AND company_id = $3`,
