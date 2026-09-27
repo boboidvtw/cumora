@@ -2870,7 +2870,10 @@ async function inferAgentGenderLocally(name: string, role: string, systemPrompt:
     const r = await client.chat.completions.create({
       model: env.LOCAL_LLM_MODEL || 'local-model',
       temperature: 0,
-      max_tokens: 400,
+      // LM Studio honours this: thinking off, answer only. With thinking on a
+      // long persona let the model reason past max_tokens and return nothing.
+      reasoning_effort: 'none',
+      max_tokens: 800,
       messages: [
         {
           role: 'system',
