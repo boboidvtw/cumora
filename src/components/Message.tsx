@@ -29,6 +29,7 @@ import { useCalendar } from '@/stores/calendar'
 import { PollBubble } from './PollBubble'
 import { LinkPreview, firstUrlInBody } from './LinkPreview'
 import { useT } from '@/lib/i18n'
+import { localizeNotice } from '@/lib/localize-notice'
 import { useChatLayoutStore } from '@/lib/chatLayout'
 
 function MentionChip({ id }: { id: string }) {
@@ -1568,19 +1569,19 @@ export function SystemRow({ msg, delay = 0, animate = true }: { msg: { body: str
       <div className={cn('flex justify-center my-3', riseCls)} style={riseStyle}>
         <div className="max-w-[min(100%,540px)] flex items-start gap-2 px-3 py-1.5 rounded-md bg-coral-soft/60 border border-coral-soft text-coral-deep text-[11.5px] font-display">
           <span className="leading-[1.4] shrink-0">⚠</span>
-          <span className="leading-[1.4] min-w-0 whitespace-pre-wrap" style={{ overflowWrap: 'anywhere' }}>{payload.text}</span>
+          <span className="leading-[1.4] min-w-0 whitespace-pre-wrap" style={{ overflowWrap: 'anywhere' }}>{localizeNotice(payload.noticeKind, payload.text, t)}</span>
         </div>
       </div>
     )
   }
 
   if (payload.kind === 'calendar_event') {
-    const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : 'Calendar event'
+    const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : t('peek.labelCalendarEvent')
     return (
       <div className={cn('flex justify-center my-3', riseCls)} style={riseStyle}>
         <div className="max-w-[min(100%,540px)] flex items-center gap-2 px-3 py-1.5 rounded-md bg-skype/10 border border-skype/20 text-skype text-[11.5px] font-display">
           <span className="leading-[1.4] shrink-0">📅</span>
-          <span className="leading-[1.4]">Calendar fired: {title}</span>
+          <span className="leading-[1.4]">{t('msgview.calendarFired', { title })}</span>
           {typeof payload.eventId === 'string' && <CalendarLink id={payload.eventId} />}
         </div>
       </div>
@@ -1614,9 +1615,9 @@ export function SystemRow({ msg, delay = 0, animate = true }: { msg: { body: str
         ) : (
           <>
             <SystemActor p={subject} onClick={onClick} />
-            <span>— {payload.kind === 'joined' ? 'joined the group'
-              : payload.kind === 'left'     ? 'left the group'
-              : payload.kind ?? 'updated the group'}</span>
+            <span>— {payload.kind === 'joined' ? t('msgview.joinedGroup')
+              : payload.kind === 'left'     ? t('msgview.leftGroup')
+              : payload.kind ?? t('msgview.updatedGroup')}</span>
           </>
         )}
       </div>

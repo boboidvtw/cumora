@@ -8,6 +8,7 @@ import { useMessages } from '@/stores/messages'
 import { useParticipants } from '@/stores/participants'
 import { isWindowAttentive } from '@/lib/windowAttention'
 import { isWatchingConversation } from '@/lib/watching'
+import { t } from '@/lib/i18n'
 
 interface ConversationsState {
   list: Conversation[]
@@ -43,8 +44,8 @@ function renderSystemPreview(
   try {
     const p = JSON.parse(raw) as { kind?: string; participantId?: string; actorId?: string; title?: string }
     if (p.kind === 'calendar_event') {
-      const title = typeof p.title === 'string' && p.title.trim() ? p.title.trim() : 'Calendar event'
-      return `Calendar fired: ${title}`
+      const title = typeof p.title === 'string' && p.title.trim() ? p.title.trim() : t('peek.labelCalendarEvent')
+      return t('msgview.calendarFired', { title })
     }
     if (!p.kind || !p.participantId) return null
     const subject = resolveName(p.participantId) ?? p.participantId
@@ -52,14 +53,14 @@ function renderSystemPreview(
     switch (p.kind) {
       case 'joined':
         return actor && actor !== subject
-          ? `${actor} added ${subject} to the group`
-          : `${subject} joined the group`
+          ? t('preview.addedBy', { actor, name: subject })
+          : t('preview.joined', { name: subject })
       case 'left':
-        return `${subject} left the group`
+        return t('preview.left', { name: subject })
       case 'kicked':
         return actor
-          ? `${actor} removed ${subject} from the group`
-          : `${subject} was removed from the group`
+          ? t('preview.removedBy', { actor, name: subject })
+          : t('preview.removed', { name: subject })
       default:
         return `${subject} — ${p.kind}`
     }
@@ -88,7 +89,7 @@ function previewOf(last: ApiConversation['lastMessage']): string {
   const meId = useAuth.getState().user?.id
   const byId = useParticipants.getState().byId
   const resolveName = (id: string): string | null => {
-    if (id === meId) return 'You'
+    if (id === meId) return t('common.you')
     return byId[id]?.name ?? null
   }
   const authorName = resolveName(last.authorId)
@@ -105,16 +106,15 @@ function previewOf(last: ApiConversation['lastMessage']): string {
     })
   const trimmedBody = humanizeMentions(last.body?.trim() ?? '')
   if (last.kind === 'tool' && last.tool) {
-    const t = last.tool as { name?: string; arg?: string }
-    return authorName
-      ? `${authorName}: used ${t.name ?? 'tool'}`
-      : `used ${t.name ?? 'tool'}`
+    const tool = last.tool as { name?: string; arg?: string }
+    const used = t('preview.usedTool', { tool: tool.name ?? 'tool' })
+    return authorName ? `${authorName}: ${used}` : used
   }
   if (last.kind === 'email' && last.email) {
     // Subject leads — that's how mailbox apps preview a thread. Body
     // excerpt follows in muted text only when there's room.
     const arrow = last.email.direction === 'in' ? '↓' : '↑'
-    const subject = last.email.subject || '(no subject)'
+    const subject = last.email.subject || t('email.noSubject')
     const snippet = trimmedBody ? ` — ${trimmedBody.slice(0, 60)}` : ''
     return `${arrow} ${subject}${snippet}`
   }
@@ -122,7 +122,7 @@ function previewOf(last: ApiConversation['lastMessage']): string {
     // System rows ship as JSON bodies — translate to a short
     // human-readable line ("Bram joined the group" / "Scout removed
     // Iris") instead of leaking raw `{"kind":"left",...}` payloads.
-    return renderSystemPreview(last.body, resolveName) ?? '(system)'
+    return renderSystemPreview(last.body, resolveName) ?? t('preview.system')
   }
   if (last.attachment) {
     // Attachment messages (user uploads) — the row stores attachment
