@@ -984,6 +984,12 @@ export const api = {
   requestPairingCode: () =>
     http<{ code: string; expiresInSeconds: number | null }>(
       '/computers', { method: 'POST', body: '{}' }),
+  /** Rotate the active workspace add-computer code. This POST is deliberately
+   *  never retried: if its response is lost, requestPairingCode() reads back
+   *  the server's current code without rotating it again. */
+  rotatePairingCode: () =>
+    http<{ code: string; expiresInSeconds: null }>(
+      '/computers/pairing-code/rotate', { method: 'POST' }),
   /** Revoke a paired computer (its device token + agent JWTs stop working). */
   deleteComputer: (id: string) =>
     http<{ ok: boolean }>(`/computers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -1396,7 +1402,7 @@ export const api = {
       `/boards/${encodeURIComponent(boardId)}/columns`,
       { method: 'POST', body: JSON.stringify({ title }) },
     ),
-  updateBoardColumn: (boardId: string, columnId: string, input: { title?: string; position?: number }) =>
+  updateBoardColumn: (boardId: string, columnId: string, input: { title?: string; position?: number; kind?: 'todo' | 'doing' | 'done' | null }) =>
     http<{ ok: boolean }>(
       `/boards/${encodeURIComponent(boardId)}/columns/${encodeURIComponent(columnId)}`,
       { method: 'PATCH', body: JSON.stringify(input) },
@@ -1407,7 +1413,7 @@ export const api = {
       { method: 'DELETE' },
     ),
   createCard: (boardId: string, input: {
-    columnId: string; title: string; description?: string; assigneeId?: string | null
+    columnId: string; title: string; description?: string; assigneeId?: string | null; dueOn?: string | null
   }) =>
     http<{ id: string; position: number; mentions: string[] }>(
       `/boards/${encodeURIComponent(boardId)}/cards`,
@@ -1415,7 +1421,7 @@ export const api = {
     ),
   updateCard: (boardId: string, cardId: string, input: {
     title?: string; description?: string; position?: number
-    columnId?: string; assigneeId?: string | null
+    columnId?: string; assigneeId?: string | null; dueOn?: string | null
   }) =>
     http<{ ok: boolean; mentions?: string[] }>(
       `/boards/${encodeURIComponent(boardId)}/cards/${encodeURIComponent(cardId)}`,
