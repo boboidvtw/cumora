@@ -23,6 +23,11 @@ x-server-env: &server-env
   # Convert any Simplified Chinese an agent posts to Traditional (Taiwan
   # wording); set to empty in .env to post exactly what the model wrote.
   AGENT_OUTPUT_SCRIPT: ${AGENT_OUTPUT_SCRIPT-zh-TW}
+  # No Kubernetes here: the pod, Chrome-profile volume and cluster-pressure
+  # sweepers would only shell out to a kubectl with no cluster and log errors.
+  ENABLE_AGENT_POD_GC: "false"
+  ENABLE_CHROME_PVC_GC: "false"
+  ENABLE_CLUSTER_MONITOR: "false"
   # No image API here: portraits are drawn on the server, and the one text
   # question they need (gender presentation) goes to LM Studio on the host.
   AVATAR_PROVIDER: ${AVATAR_PROVIDER:-local}
