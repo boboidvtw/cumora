@@ -9,22 +9,37 @@ project's [MIT License](LICENSE).
 
 ## Getting set up
 
-You need **Node ≥ 22** (CI runs on Node 24), plus **Postgres** and **Redis**
-running locally. Node 18 and 20 can no longer install the dependency tree —
-`@capacitor/cli` requires `node >= 22` and `@aws-sdk/client-s3` requires
-`node >= 20`.
+You need **Postgres** and **Redis** running locally. Node floors differ by
+artifact. The root `package.json` `engines` field is `>=20`, which is the
+install floor the production image proves. npm is not run with
+`engine-strict`, so a dependency's own engines field warns instead of
+failing `npm ci`.
+
+| Artifact | Node |
+| --- | --- |
+| Root `engines` | `>=20` |
+| CI typecheck, test, and deploy (`pr.yml`, `build.yml`, `deploy.yml`, `production-readback.yml`) | 24 |
+| `publish.yml` | 20 |
+| `server/docker/cumora-server.Dockerfile`, `server/docker/agent-computer.Dockerfile` | `node:20-bookworm-slim` |
+| `agent-cli/package.json` `engines` | `>=18` |
+| `@capacitor/cli` | `>=22` |
+
+Use Node 22 or newer for local app and mobile work. CI runs Node 24.
+Node 20 can install this tree — the server and agent images do it on every
+build. Node 18 is below the AWS SDK and Capacitor floors. Production images
+still run Node 20 while CI validates Node 24; those are different runtimes.
 
 ```bash
 createdb -h localhost cumora
 export OPENAI_API_KEY=sk-...        # the only hard-required env var
 
-npm run setup                     # root + Email Worker dependencies
+npm run setup                     # root + email-gate + r2-gate dependencies
 npm run dev:all                     # Vite renderer on :5180 + API server on :5181
 ```
 
 Use `npm run setup` rather than a root-only `npm install`: the root test
-command also runs `workers/email-gate` tests, whose dependencies live in the
-Worker's separate `package.json`.
+command also runs `workers/email-gate` and `workers/r2-gate` tests, whose
+dependencies live in each worker's `package.json`.
 
 Open http://localhost:5180 for the web app, or `npm run electron:dev` for the
 desktop shell. Database migrations are applied via `npm run migrate` (run
@@ -33,7 +48,8 @@ sub2api LLM gateway) soft-disables when its env vars are unset — see
 [`.env.example`](.env.example).
 
 Component-specific setup lives in [`docs/`](docs/): `BYOA.md` (the local-engine
-daemon), `MOBILE_IOS.md`, `PUSH_NOTIFICATIONS.md`, `email.md`.
+daemon), `MOBILE_IOS.md`, `PUSH_NOTIFICATIONS.md`, `email.md`, `API.md`,
+`LIMITS.md`, `EGRESS.md`.
 
 ## Before you open a PR
 
@@ -69,12 +85,12 @@ rules are on; noisy or intentional-pattern style rules are off, while the a11y
 rules are enforced incrementally (useButtonType, ARIA roles/props, and core
 accessibility rules are active).
 
-Both TypeScript projects are `strict`. Tests live in four places, and
-`npm test` runs the first, third and fourth: `tests/` (frontend lib units),
-`server/src/__integration__` (integration, opt-in via the env var above),
-`server/src/__tests__` (server units), and `workers/email-gate/src`
-(Worker units — this is why you want `npm run setup` over a bare
-`npm install`).
+Both TypeScript projects are `strict`. Tests live in five places:
+`tests/` (frontend lib units), `server/src/__integration__` (integration,
+opt-in via the env var above), `server/src/__tests__` (server units),
+`workers/email-gate/src`, and `workers/r2-gate/src`. `npm test` runs all of
+those except integration. The worker glob is `workers/**/*.test.ts`, which
+is why `npm run setup` installs both workers instead of a bare `npm install`.
 
 ## Three architecture invariants (enforced in CI)
 
@@ -120,6 +136,46 @@ this project production time:
 
 Transactional migrations that still lose a lock race are retried with backoff
 before the Job fails, so a brief contention spike does not need a redeploy.
+
+`verifyRequiredIndexes` runs on every migration Job, including when nothing
+is pending. A name in `REQUIRED_SCHEMA_INDEXES` fails that Job if the index
+is missing or invalid. Several of those indexes are created only from the
+legacy baseline, so adding a name without a migration that builds it on
+databases already past version 1 blocks deploys, and nothing rebuilds it.
+Remove a name from the required list in the same commit that drops the
+index, and remove the name first. Do not drop
+`idx_conversations_members_gin` because an older comment mentioned a
+rollback window.
+
+`MIN_SUPPORTED_SCHEMA_VERSION` and `MAX_SUPPORTED_SCHEMA_VERSION` are both
+the manifest tip. Appending a migration moves the only schema this build
+will boot. The previous image then refuses the new ledger, so
+`kubectl rollout undo` is not a recovery plan for that deploy. See
+[`docs/RELEASE.md`](docs/RELEASE.md).
+
+Copy `server/src/db/migrations/0002-normalized-conversation-members.ts` when
+you add structure: it introduces the new table, names the foreign keys, and
+writes down `ON DELETE`. The checklist next to the files is
+[`server/src/db/migrations/README.md`](server/src/db/migrations/README.md).
+
+## Dependency advisories
+
+CI does not fail on `npm audit`. The deploy and benchmark workflows install
+with `--no-audit`. The repo has no Dependabot, Renovate, or CodeQL config.
+Until a gate exists, this is the process:
+
+- Before adding or upgrading a dependency, run `npm audit --omit=dev` in
+  the package you changed (the root, `agent-cli`, `workers/email-gate`, or
+  `workers/r2-gate`) and read advisories on packages you are introducing
+  or bumping.
+- In the PR, name each high or critical advisory you are not fixing: the
+  package, the advisory id, whether this repo can reach the vulnerable
+  code, who owns the exception, and the date it expires. Ninety days is
+  the default; say why if the window is different.
+- Do not add `--no-audit` or an audit override without that record.
+
+GitHub Actions in the existing workflows are referenced by tag. Changing
+that pin is a separate change; this policy does not require it.
 
 The multi-agent coordination model (how N agents share a room without
 colliding, and why the prompt is kept deliberately minimal) is documented in

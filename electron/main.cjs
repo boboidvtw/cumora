@@ -455,8 +455,9 @@ function armAuthHandoff() {
 }
 
 /** Validate + single-use-consume an inbound nonce. Constant-time compare so a
- *  mismatch leaks nothing; clears the armed nonce on any check so a token can
- *  be accepted at most once. */
+ *  mismatch leaks nothing. The armed nonce is cleared only on a match, or when
+ *  it is already missing or expired. Any other inbound value leaves the pending
+ *  sign-in armed, so a stale tab cannot disarm a newer one. */
 function consumeAuthNonce(nonce) {
   const armed = armedAuthNonce
   const expiry = armedAuthExpiry

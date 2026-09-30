@@ -43,27 +43,52 @@ In scope — anything that lets someone:
 
 Out of scope:
 
-- Findings that require a misconfigured self-hosted deployment the code
-  actively warns against — e.g. running in production with a dev-default
-  secret. The server refuses to boot in that state on purpose
-  (`AGENT_RUNTIME_SECRET`); a report that assumes it was forced past that gate
-  is a configuration issue, not a vulnerability.
-- Denial of service / volumetric abuse.
+- A production boot that was deliberately started with the public
+  dev-default `AGENT_RUNTIME_SECRET` after the startup check was bypassed.
+  That check runs only when `NODE_ENV === 'production'`
+  (`server/src/env.ts`). `NODE_ENV` defaults to `development`, and in that
+  mode the server does boot with the default. A report that the default
+  works outside production is describing the code, not a bypass.
+- Denial of service that is only volumetric flooding. An unauthenticated
+  endpoint that leaks data, forges a session, or crosses a tenant is in
+  scope under the bullets above. The server does not have a general HTTP
+  rate limit; that absence is not itself a vulnerability report.
 - Reports from automated scanners without a demonstrated, exploitable impact.
 - Social engineering, physical access, or attacks requiring a
   compromised operator machine.
 
-## The trust model, in one paragraph
+## Trust boundaries
 
-The **server is the authorization boundary**. Every client — the web app, the
-Electron shell, the mobile shell, and the BYOA daemon — is untrusted and must
-have its input validated server-side. Agent identity on every `/runtime/*`
-call is pinned from a signed JWT, never from the request body. Tenants are
-isolated in SQL, not in the client. On a BYOA host, a second boundary protects
-the operator's machine: secure-default model tools are OS-sandboxed and receive
-neither the runtime JWT nor the daemon's environment/network authority. If you
-find a place where either boundary can be bypassed, that's a vulnerability we
-want to hear about.
+The **server is the authorization boundary** for the web app, the Electron
+shell, the mobile shell, and the BYOA daemon. Those clients are untrusted.
+Agent identity on every `/runtime/*` call is pinned from a signed JWT, never
+from the request body. Tenants are isolated in SQL, not in the client.
+
+On a **BYOA host**, a second boundary protects the operator's machine:
+secure-default model tools are OS-sandboxed and receive neither the runtime
+JWT nor the daemon's environment or network authority.
+
+The **cloud agent Pod is a weak boundary, on purpose**. Mounting FUSE on
+GKE's container-optimized OS needs `CAP_SYS_ADMIN` during bootstrap and
+leaves AppArmor unconfined for that phase. The long-running process is then
+dropped to uid 65532. Conversation content reaches a shell inside that Pod
+by design. What we want reported is a path from one tenant's agent to
+another tenant's Pod, data, or credentials, or a path from code in the Pod
+to the node or the control plane. The granted capabilities and the
+compensating controls are written down in
+[`server/k8s/gke.md`](server/k8s/gke.md) under "Agent policy and runtime
+security prerequisites".
+
+**Inbound email is not authenticated.** `workers/email-gate` accepts mail
+whose recipient domain is listed. It does not read `Authentication-Results`
+and does not check SPF, DKIM, or DMARC. The server then maps the `From:`
+header onto an agent or a human in the recipient's workspace. A spoofed
+`From:` can show up as an internal author and enter an agent's context.
+The HMAC on `/webhooks/email/inbound` authenticates the worker to the
+server. It says nothing about the sender. Details are in
+[`docs/email.md`](docs/email.md).
+
+A bypass of any of these boundaries is a vulnerability we want to hear about.
 
 ## Deploying Cumora securely
 

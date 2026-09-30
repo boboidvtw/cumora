@@ -12,9 +12,11 @@ function toIso(value: unknown): string {
 }
 
 /**
- * Update a participant's status in Postgres and broadcast it. Single source
- * of truth for status changes — the loop, tool executor, and WS presence
- * tracker all funnel through here.
+ * Update a participant's status in Postgres and broadcast it. The turn
+ * loop, tool executor, and WS presence tracker funnel through here.
+ * This is not the only writer: `GET /api/participants` expires a busy
+ * lease in SQL and does not publish `CH_STATUS`, so clients learn about
+ * that transition on the next read or a later broadcast.
  *
  * A participant id can map to multiple rows when a human belongs to more
  * than one company (humans share an id across tenants). We update every

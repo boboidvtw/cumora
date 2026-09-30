@@ -910,12 +910,13 @@ function isComputerKind(value: unknown): value is ComputerKind {
   return value === 'cloud' || value === 'local' || value === 'vps'
 }
 
-/** Resolve where an agent runs + its company. Not cached: this sits on the
- *  scheduler's cold path (wakeOne only calls it for a resting agent with no
- *  live subscriber), and it's a single indexed lookup — a PK probe on
- *  participants + PK joins on computers/company ownership. An in-process cache here would
- *  be both pointless (cold path) and unsafe (each replica caches independently,
- *  so reassignments/tier changes go stale per-pod). LEFT JOIN so an unassigned
+/** Resolve where an agent runs + its company. Not cached. Group-message
+ *  fan-out calls this once per recipient, before it knows whether that
+ *  recipient already has a live subscriber, so this is on the hot path.
+ *  The SQL is a participant lookup plus a LATERAL owner-tier join ordered
+ *  by `company_members.joined_at`, not a single primary-key probe. An
+ *  in-process cache would also go stale independently on each replica
+ *  when an agent is reassigned or a tier changes. LEFT JOIN so an unassigned
  *  agent (computer_id NULL) still returns its companyId with a null kind.
  *
  *  Do not throw lookup failures into the same shape as "missing": callers route

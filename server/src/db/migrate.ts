@@ -2255,6 +2255,9 @@ async function applyLegacyBaseline(client: import('pg').PoolClient): Promise<voi
     CREATE UNIQUE INDEX IF NOT EXISTS participants_agent_id_unique
       ON participants(id) WHERE kind = 'agent'
   `)
+  // Agent ids are unique across tenants. Joins that look up an agent by
+  // id alone stay one row only because of this index; a second live agent
+  // row with the same id would fan those joins out.
   await client.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS uniq_participants_agent_creation_request
       ON participants(company_id, creation_request_id)
@@ -2934,11 +2937,18 @@ async function buildConcurrentIndexes(client: import('pg').PoolClient): Promise<
   const indexes: Array<{ name: string; create: string }> = [
     {
       name: 'idx_conversations_members_gin',
-      // Retained for the expand-release rollback window only. `loadInbox` /
-      // `loadContext` / inbox-triage no longer read `members @> [agentId]` —
-      // they resolve membership through the normalized `conversation_members`
-      // participant index (see inproc-client.ts). Drop this index once the
-      // rollback window closes.
+      // DO NOT DROP. This name is in BASELINE_REQUIRED_SCHEMA_INDEXES.
+      // verifyRequiredIndexes fails the migration Job when the index is
+      // missing or invalid, and this function is the only creator — it runs
+      // from the legacy baseline, not on later deploys. Dropping it blocks
+      // every subsequent deploy with no code path to rebuild it.
+      // To retire it: remove the name from BASELINE_REQUIRED_SCHEMA_INDEXES
+      // and drop the index in the same commit, in that order.
+      // `loadInbox` / `loadContext` / inbox-triage no longer read
+      // `members @> [agentId]`; they use `conversation_members`. That does
+      // not make the boot gate optional. This build's schema range also
+      // does not roll back onto the previous image, so there is no rollback
+      // window that justifies a drop.
       create: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_conversations_members_gin
                  ON conversations USING gin (members jsonb_path_ops)`,
     },

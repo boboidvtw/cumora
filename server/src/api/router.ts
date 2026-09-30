@@ -1,3 +1,13 @@
+/**
+ * Human HTTP API. One router, mounted at `/api`.
+ *
+ * `authMiddleware` does not reject. Handlers that need a user call
+ * `requireAuth` or `requireCompany`. There is no cookie session.
+ * Creates that accept `requestId` rely on partial unique indexes, not a
+ * shared idempotency middleware. Workspace deletion order is load-bearing:
+ * conversations go before participants because `conversation_members`
+ * references participants with `ON DELETE RESTRICT`.
+ */
 import { Router, json, type Request, type Response, type NextFunction } from 'express'
 import { isProviderProfileId } from '../agents/computer/provider-profiles.js'
 import type { PoolClient } from 'pg'
@@ -1902,6 +1912,10 @@ api.delete('/companies/:id', safe(async (req, res) => {
       }
     }
     await client.query(`DELETE FROM documents WHERE company_id = $1`, [companyId])
+    // Conversations before participants. conversation_members references
+    // participants ON DELETE RESTRICT, so the opposite order fails 23503
+    // while conversations and their member rows are still there.
+    // Deleting conversations cascades to conversation_members first.
     await client.query(`DELETE FROM conversations WHERE company_id = $1`, [companyId])
     await client.query(`DELETE FROM participants WHERE company_id = $1`, [companyId])
     // Keep the billing/usage ledger (llm_calls + llm_calls_rollup) and global

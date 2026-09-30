@@ -21,8 +21,9 @@
  *
  * Multiple subscribers per agent on the same server are allowed (the
  * agent's Pod may reconnect briefly during a rolling restart). Events
- * fan out to all live local subscribers; the Pod deduplicates by
- * event id (each event carries a fresh uuid).
+ * fan out to all live local subscribers. Each event carries a fresh
+ * uuid, but the Pod does not read it: both copies call drain(). A
+ * reconnect overlap can therefore run the wake twice.
  *
  * Single-instance deploys: this still works — the pub/sub round-trip
  * is local to the one Redis instance, so latency is sub-millisecond.
@@ -50,7 +51,7 @@ type WakeEventPayload =
   | Omit<WakeEventBase & WakeKindSteer, 'id' | 'at'>
 
 interface WakeEventBase {
-  /** Stable id so the Pod can dedupe across reconnect overlap. */
+  /** Fresh id for logs. The Pod does not dedupe on it. */
   id: string
   /** When the event was minted (server clock, ms since epoch). */
   at: number

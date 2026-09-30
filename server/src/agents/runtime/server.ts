@@ -13,8 +13,10 @@
  * replaced runtime can't operate as another Agent placement.
  *
  * Mount at `/runtime` from `server/src/index.ts`. Not nested under
- * `/api` because the cookie-auth middleware on /api would reject these
- * (and we don't want pods sharing the human session cookie path).
+ * `/api` so a pod token is not mistaken for a human session. Human
+ * `/api` auth is header-based (`Authorization: Bearer` or
+ * `x-session-token`); there is no cookie session, and `authMiddleware`
+ * never rejects a request on its own.
  */
 import { json, type NextFunction, type Request, type Response, Router } from 'express'
 import { publicBodyParserError } from '../../body-parser-errors.js'

@@ -50,9 +50,10 @@ function safe(handler: (req: Request & AuthedRequest, res: Response) => Promise<
  * forth — so the SAME heavy aggregation gets recomputed seconds apart. A short
  * TTL collapses those repeats to one DB round-trip without making the numbers
  * meaningfully stale (a spend dashboard does not need second-level freshness).
- * Single-pod-local + unbounded-by-design: keys are low-cardinality (a handful
- * of sinceDays × model × tenant combos) and entries self-expire, so it never
- * grows without bound.
+ * Single-pod-local. Expired entries are not deleted: `get` ignores them
+ * and `set` replaces the same key, but nothing sweeps or caps the map.
+ * The key is built from request query strings, so distinct filters add
+ * entries for the life of the process.
  */
 const aggCache = new Map<string, { at: number; ttlMs: number; value: unknown }>()
 async function cachedAgg<T>(key: string, ttlMs: number, compute: () => Promise<T>, force = false): Promise<T> {

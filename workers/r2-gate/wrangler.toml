@@ -3,8 +3,9 @@
 # Routes: every request to `cdn.cumora.ai/*` flows through this worker
 # instead of going straight to R2's custom-domain handler. The worker
 # validates a server-signed query string before reading the bucket via
-# its R2 binding, then proxies the bytes back to the client (with CDN
-# caching on hits).
+# its R2 binding, then returns the bytes. Reads go through the R2 binding,
+# not fetch() or the Cache API. The worker sets Cache-Control; it does not
+# itself store an edge hit.
 #
 # Deploy:
 #   cd workers/r2-gate

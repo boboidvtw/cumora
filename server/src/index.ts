@@ -139,7 +139,9 @@ async function main() {
   })
   app.use('/api', api)
   // Per-pod agent runtime API — JWT-authed, completely separate from the
-  // cookie-auth /api/* surface used by humans. See agents/runtime/server.ts.
+  // human /api/* surface. That surface reads Authorization: Bearer or
+  // x-session-token; it has no cookie session, and authMiddleware does not
+  // reject. See agents/runtime/server.ts.
   app.use('/runtime', runtimeRouter)
 
   // ============== Host gating ==============

@@ -16,8 +16,9 @@
  *   - `mode` — 'local' | 'r2', surfaced so the API can advertise it
  *
  * Keys look like `<prefix>/<uuid>.<ext>`. Prefixes are conventional:
- *   - `attachments/` — user uploads
- *   - `avatars/`     — agent portraits
+ *   - `attachments/`       — user uploads (signed)
+ *   - `email-attachments/` — inbound and outbound mail files (signed)
+ *   - `avatars/`           — portraits (the only unsigned R2 prefix)
  */
 import { writeFile, mkdir, readdir, stat, unlink } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
@@ -37,8 +38,11 @@ import {
 export { normalizeStorageKey }
 
 /** Keys under these prefixes get HMAC-signed URLs when a signing secret is
- *  configured. Other prefixes (e.g. `avatars/`) are served unsigned — they
- *  carry no private user content and benefit from full CDN caching. */
+ *  configured. The R2 worker serves only `avatars/` without a signature;
+ *  every other key is rejected at the edge until it is signed. Keep this
+ *  list, `PUBLIC_PREFIXES` in `workers/r2-gate/src/index.ts`, and
+ *  `STORAGE_KEY_PREFIXES` in `storage-keys.ts` in agreement — the prefix
+ *  contract test fails when they drift. */
 const SIGNED_PREFIXES = ['attachments/', 'email-attachments/']
 function needsSignature(key: string): boolean {
   return SIGNED_PREFIXES.some((p) => key.startsWith(p))

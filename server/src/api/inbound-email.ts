@@ -131,14 +131,17 @@ interface InboundPayload {
   }>
 }
 
-/** Verify a hex-encoded HMAC-SHA256 against the raw body bytes. Constant-
- *  time compare so no timing oracle. */
+/** Accept only a 64-hex-digit signature, stripping an optional `sha256=`
+ *  prefix. This does not compute or compare an HMAC. Callers that use it
+ *  as a 401 gate have checked the shape, not the authenticity, of the header. */
 function normalizeSignature(signature: string): string | null {
   let normalized = signature.trim().toLowerCase()
   if (normalized.startsWith('sha256=')) normalized = normalized.slice(7)
   return /^[a-f0-9]{64}$/.test(normalized) ? normalized : null
 }
 
+/** HMAC-SHA256 of the raw body, compared in constant time so a wrong
+ *  signature is not a timing oracle. `normalizeSignature` only checks shape. */
 function verifySignature(rawBody: Buffer, signature: string): boolean {
   const secret = env.EMAIL_INBOUND_HMAC_SECRET
   if (!secret) return false

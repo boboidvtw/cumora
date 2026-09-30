@@ -370,10 +370,46 @@ kubectl logs agent-<id>
   independent read-only verifier. Unknown or newer schema history requires a
   forward-compatible image or reviewed repair; it is never treated as proof
   that an arbitrary old image can start.
-- **Idle scheduler** — runs in-process on EACH server replica.
-  That's fine because idle's tick currently publishes to
-  CH_MESSAGE_NEW which SETNX-dedups; only one replica handles
-  each tick's downstream work.
 - **Monitoring** — both Pods (server + agent) log to stdout/stderr
   which GKE auto-collects to Cloud Logging. Set up alerting on
   agent_runs.status='failed' or kubelet's container_restart_count.
+- **Idle scheduler** — runs in-process on EACH server replica, and that
+  is not safe. `server/src/agents/idle.ts` calls `wakeAgent` directly.
+  It does not publish `CH_MESSAGE_NEW`, and there is no SETNX, advisory
+  lock, or in-flight guard. Every replica classifies agendas and can wake
+  the same agents. Until that changes, set `IDLE_INTERVAL_MS=0` or
+  `ENABLE_IDLE=false` on all but one replica, or run a single server
+  replica. The table below is the ownership record for the other loops.
+
+## Background task topology
+
+Every loop below starts inside the API process (`server/src/index.ts`).
+There is no separate worker deployment. "Claim" is what the code does
+today, not what a new loop should copy without reading the file.
+
+| Job | File | Interval / switch | Claim | Safe on N replicas? |
+| --- | --- | --- | --- | --- |
+| Mailbox scheduler | `agents/scheduler.ts` `startScheduler` | Redis subscribe; no interval | Per-message wake claim, 60s TTL | Subscribers are meant to run on every replica |
+| Wake-retry worker | `scheduler.ts` `startWakeRetryWorker` | 5s; per-process in-flight guard | Redis claim | Yes, via the claim |
+| Scanner | `agents/scanner.ts` | `SCANNER_INTERVAL_MS` (90s); `ENABLE_SCANNER=false` | `pg_try_advisory_lock`, plus a Redis wake claim | Yes. One replica holds the lock |
+| Idle scheduler | `agents/idle.ts` | `IDLE_INTERVAL_MS` (15min); `0` or `ENABLE_IDLE=false` | None | No. Duplicate classification and wakes |
+| Email retry | `email-retry.ts` | `EMAIL_RETRY_INTERVAL_MS` (60s); `0` disables | `FOR UPDATE SKIP LOCKED` | Yes |
+| Email attachment GC | `email-gc.ts` | `EMAIL_GC_INTERVAL_MS` (24h); `0` disables | None. Deletes are idempotent | Overlapping sweeps waste work; a lost delete race is harmless |
+| DB GC | `db-gc.ts` | `DB_GC_INTERVAL_MS` (5min); `0` disables | None. Deletes are idempotent | Same as email GC |
+| Trial sweep | `trial-sweep.ts` | 1h; no switch | None | Overlap can repeat the external tier call until the stamp clears |
+| Calendar dispatcher | `calendar.ts` | 60s; no switch | Per-slot claim | The tick has no in-flight guard, so a slow pass can overlap the next |
+| Poll expiration | `polls.ts` | `POLL_SWEEP_INTERVAL_MS` (60s); `0` disables | `FOR UPDATE` per poll | Yes |
+| LLM rollup | `agents/llm-rollup.ts` | `LLM_ROLLUP_INTERVAL_MS` (120s); `0` disables | `pg_try_advisory_lock` | Yes |
+| Shipping maintenance | `shipping-maintenance.ts` | 5min; no switch | `pg_try_advisory_xact_lock` | Yes |
+| Realtime outbox | `realtime-outbox.ts` | 1s; no switch | `SKIP LOCKED`, attempt cap, discard | Yes |
+| Workspace cleanup | `workspace-cleanup.ts` | `WORKSPACE_CLEANUP_INTERVAL_MS` (60s); `<=0` disables | `SKIP LOCKED` lease. No attempt cap; backoff tops out at 1h | Two replicas will not take the same row. A failing job is retried forever |
+| Finished agent-pod GC | `agents/runtime/orchestrator.ts` | 60s; `ENABLE_AGENT_POD_GC=false` | None | Deletes of finished pods are idempotent; replicas duplicate the list call |
+| Chrome-profile PVC GC | `orchestrator.ts` | `CHROME_PVC_GC_INTERVAL_MS` (1h); `ENABLE_CHROME_PVC_GC=false` | None | Same shape as pod GC |
+| FUSE pressure monitor | `orchestrator.ts` | 60s; `ENABLE_CLUSTER_MONITOR=false` | None | Every replica can raise the same alert |
+| Stale agent-run sweeper | `agents/observability.ts` | 60s; `ENABLE_AGENT_RUN_SWEEPER=false` | None. `UPDATE … WHERE status = 'running'` | A second replica's pass is a no-op for rows already closed |
+| Computer offline sweep | `index.ts` | 30s; no switch | None | Every replica runs it |
+| Boot presence reset | `resetHumanPresenceOnBoot` | Once, after `listen` | None | Every replica runs it |
+
+`message.new` wakes are not replayed by the post-spawn health retry.
+`scheduleWakeRetry` with the default `ensure_pod` class drops every reason
+except `manual`. The comment on that call in `scheduler.ts` says so.

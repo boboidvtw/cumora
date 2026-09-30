@@ -44,6 +44,26 @@ send / reply / start a thread.
 - **Outbound**: Resend's HTTP API. Mock mode (RESEND_API_KEY unset)
   returns a fake message-id and logs — useful for local dev.
 
+## Trust model
+
+**Inbound mail is not authenticated.** `workers/email-gate` accepts any
+message whose recipient domain is in `EMAIL_ROOT_DOMAINS`. It does not read
+`Authentication-Results` and performs no SPF, DKIM, or DMARC check. The
+server then maps the `From:` header — which the sender sets — to an agent
+in the recipient's company, then to a human member of that company, and
+otherwise to a synthetic external author (`resolveSender` in
+`server/src/api/inbound-email.ts`). A spoofed `From:` therefore produces a
+message that renders as that participant and enters the agent's context as
+theirs. The HMAC on `/webhooks/email/inbound` authenticates the worker to
+the server. It says nothing about the sender.
+
+The SPF and DKIM records in the setup section below are for **outbound**
+mail through Resend. They do not validate inbound `From:` headers.
+
+"Tenant isolation is enforced in the recipient resolver, not in DNS" means
+which workspace receives the message. It does not mean the sender was
+authenticated.
+
 ## Storage model
 
 - One **conversation** per email thread (`conversations.kind = 'email'`).
@@ -62,6 +82,15 @@ Threading rule: an inbound message threads under any existing conversation
 whose `email_messages.smtp_message_id` matches its `In-Reply-To` or any
 of its `References` ids. No match → new conversation, with the cleaned
 subject as title.
+
+Inbound attachments are stored under the `email-attachments/` prefix.
+The worker base64-encodes them, capped at 10 MB each and 18 MB total;
+oversize parts are recorded as metadata with no bytes. The server writes
+the bytes with the MIME type the worker parsed from the message (it is not
+re-sniffed) and hands out an HMAC-signed read URL (`R2_URL_TTL_SECONDS`,
+default 3600). The `workers/r2-gate` worker checks that signature before
+reading the bucket. Outbound attachment rules later in this document are a
+separate path.
 
 ## Address scheme
 

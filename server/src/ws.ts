@@ -32,8 +32,9 @@ interface AuthedSocket {
   /** Stable per-socket id used as the Yjs update origin. Lets the room
    *  manager echo-suppress on this client's own outbound updates. */
   originId: string
-  /** Set of company_ids this user is a member of. Refreshed on connect; the
-   *  WS bridge uses it to filter Redis events tagged with `companyId`. */
+  /** Company ids loaded at connect. Used only to log membership count.
+   *  Fan-out does not consult this set: delivery is by user id, and one
+   *  socket receives frames for every workspace that user belongs to. */
   companies: Set<string>
   /** Active doc subscriptions on this socket. Released on close. */
   docSubs: Map<string, DocSubscriber>
@@ -1371,9 +1372,10 @@ export function attachWebSocket(httpServer: Server) {
   sub.on('message', (channel, payload) => {
     // Doc channels are room-scoped, not company-scoped — skip them here.
     if (channel === 'cumora:doc.update' || channel === 'cumora:doc.awareness') return
-    // Tenant-aware fan-out: only deliver an event to a socket if the event's
-    // companyId is in the socket's set of memberships. Untagged events are
-    // dropped (no leakage), since every publisher is expected to tag.
+    // Untagged events are dropped. Tagged events are then delivered to the
+    // user ids resolveWsEventRecipientUserIds returns, not by intersecting
+    // companyId with the socket's membership snapshot. A connected user
+    // receives frames for every workspace they belong to.
     let event: RoutedRedisEvent
     try {
       event = JSON.parse(payload) as RoutedRedisEvent

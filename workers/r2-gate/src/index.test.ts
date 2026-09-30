@@ -148,6 +148,13 @@ test('conditional signed GET returns 304 after an authenticated R2 revalidation'
   assert.equal(bucket.headCalls, 0)
 })
 
+test('unknown prefixes are private and do not touch the bucket', async () => {
+  const bucket = fixtureBucket('notes/secret.txt')
+  const response = await request('GET', 'https://gate.invalid/notes/secret.txt', bucket)
+  assert.equal(response.status, 403)
+  assert.equal(bucket.getCalls + bucket.headCalls, 0)
+})
+
 test('avatars remain unsigned and publicly cacheable', async () => {
   const key = 'avatars/alice.png'
   for (const method of ['GET', 'HEAD'] as const) {

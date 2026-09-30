@@ -334,10 +334,11 @@ export async function wakeAgent(
 // The fix is a hard cap on synthetic wakes per cumora-server process
 // per minute. User-facing reasons (`message.new`, `manual`) are NEVER
 // rate-limited — they correspond to a real user action and must go
-// through promptly. Per-process counter is fine because the actual
-// scheduler scope (idle.ts, scanner.ts) IS per-process; multiple
-// replicas multiply the budget naturally (a 2-replica deploy gets
-// 2 × LOW_PRIORITY_WAKE_BUDGET_PER_MIN cluster-wide).
+// through promptly. The counter is per process. Idle ticks really do
+// run on every replica (`idle.ts` takes no lock), so replicas multiply
+// the idle budget. The scanner does not: `scanner.ts` holds
+// `pg_try_advisory_lock` for the tick, so this cap is not a cluster-wide
+// scanner budget.
 const LOW_PRIORITY_WAKE_BUDGET_PER_MIN = 20
 let lowPriWindowStart = Date.now()
 let lowPriUsed = 0
@@ -624,9 +625,12 @@ async function wakeOne(
     // A successful kubectl apply does not guarantee the pod will ever
     // reach the runtime wake stream: kubelet can reject allocation
     // immediately after scheduling (for example a transient unhealthy
-    // devic.es/fuse device). Queue one delayed health retry for
-    // durable wakes; if the pod is healthy, the retry just delivers a
-    // wake and the inbox fingerprint makes the turn no-op.
+    // devic.es/fuse device). The call below defaults failureClass to
+    // `ensure_pod`, and that class is queued only for `manual` wakes.
+    // For `message.new` it is a no-op. The durable inbox is the recovery
+    // path, and replaying the wake can duplicate a turn. The inline replay
+    // loop further down is also skipped for `message.new`, so a durable
+    // wake whose new pod never attaches is not retried here.
     await scheduleWakeRetry(agentId, reason, conversationId, steerPayload, options, Math.max(1, retryAttempt + 1), 'post-spawn health check')
   } else if (!r.ok) {
     console.error(`[scheduler] ${agentId} ensurePod failed: ${r.reason}`)
@@ -1034,8 +1038,7 @@ export function mentionedAgentIds(body: string, agentMemberIds: readonly string[
     new RegExp(`(^|[^\\w@])@${escapeRegex(id)}(?![\\w-])`, 'i').test(body))
 }
 
-/** Exported for tests — pulled out of `wake` so the wake-policy is
- *  easy to assert on. Fire-and-forget per recipient. */
+/** Render a small-brain inbox verdict into the note attached to the wake. */
 function renderTriageNote(verdict: InboxTriageVerdict): string {
   const state = verdict.actionable ? 'relevant' : 'not relevant'
   const reason = verdict.reason.trim() ? `\nReason: ${verdict.reason.trim().slice(0, 500)}` : ''

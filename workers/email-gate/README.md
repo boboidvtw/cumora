@@ -12,7 +12,7 @@ The worker:
 2. Reads the raw RFC 5322 message and parses it with `postal-mime`.
 3. Builds a JSON payload (message-id, in-reply-to, references, from, to, cc, subject, text, html, raw size, `autoSubmitted` per RFC 3834, and `attachments[]` as base64 — capped at 10 MB per attachment and 18 MB in total).
 4. HMAC-signs the payload with `EMAIL_INBOUND_HMAC_SECRET` and POSTs to `CUMORA_INBOUND_URL`.
-5. Translates the server's response into accept or reject. Every rejection is **permanent** (`message.setReject`) — including the 5xx branch, which arguably should tempfail so the sender's MTA retries. See the note in `src/index.ts`.
+5. Translates the server's response into accept or reject. A 404, and other 4xx responses, are permanent (`message.setReject`). A network error or a 5xx response throws so Cloudflare Email Routing returns a temporary failure and the sender's MTA can retry. The domain allowlist is the worker's only check on who sent the mail; it does not read `Authentication-Results`.
 
 Outbound mail goes through Resend on the server side, **not** this worker — Cloudflare Email Workers can't send mail.
 

@@ -4,17 +4,20 @@
  *
  * Access model:
  *   - GET /avatars/<key>           → unsigned, public. Portraits aren't
- *                                    sensitive and benefit from full CDN
- *                                    caching.
+ *                                    sensitive. This is the only public
+ *                                    prefix.
  *   - GET /attachments/<key>       → must carry `?exp=<unix>&sig=<hex>`;
  *   - GET /email-attachments/<key> → uses the same signed query contract.
  *                                    `sig` = HMAC-SHA256(secret,
  *                                    `<key>:<exp>`). Both `exp` (not in
  *                                    the past) and `sig` (constant-time
  *                                    equal) are checked before reading R2.
+ *   - any other key                → same signature check. The default is
+ *                                    private; a new prefix is not public
+ *                                    until it is added to PUBLIC_PREFIXES.
  *   - HEAD                         → same auth as GET; useful for size
  *                                    probes from clients.
- *   - everything else              → 405.
+ *   - any other method             → 405.
  *
  * Secret rotation: rotate `R2_URL_SIGNING_SECRET` on both the Cumora
  * server and `wrangler secret put` here in lockstep. URLs already signed
@@ -26,9 +29,11 @@ export interface Env {
   R2_URL_SIGNING_SECRET: string
 }
 
-/** Prefixes that demand a valid `?exp&sig` pair. Anything outside this
- *  list is treated as publicly cacheable. */
-const SIGNED_PREFIXES = ['attachments/', 'email-attachments/']
+/** Prefixes that may be read without a signature. Every other object key
+ *  is private: a missing or bad `?exp&sig` pair is rejected before the
+ *  bucket is read. Add a prefix here only when the object is intentionally
+ *  public. `server/src/storage.ts` must sign every prefix that is not listed. */
+const PUBLIC_PREFIXES = ['avatars/']
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -39,7 +44,7 @@ export default {
     const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
     if (!key) return new Response('not found', { status: 404 })
 
-    const needsSig = SIGNED_PREFIXES.some((p) => key.startsWith(p))
+    const needsSig = !PUBLIC_PREFIXES.some((p) => key.startsWith(p))
     if (needsSig) {
       const gate = await verifySignature(key, url.searchParams, env.R2_URL_SIGNING_SECRET)
       if (!gate.ok) return new Response(gate.reason, { status: 403 })

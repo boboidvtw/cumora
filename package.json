@@ -9,6 +9,9 @@
   },
   "description": "Where agent teams gather. Cross-platform team chat with AI agents as first-class participants.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/yetone/cumora.git"
@@ -19,7 +22,7 @@
     "email": "yetoneful@gmail.com"
   },
   "scripts": {
-    "setup": "npm install && npm install --prefix workers/email-gate",
+    "setup": "npm install && npm install --prefix workers/email-gate && npm install --prefix workers/r2-gate",
     "dev": "vite --port 5180 --strictPort",
     "dev:all": "npm run migrate && concurrently -k -n web,api -c blue,magenta \"npm:dev\" \"npm:server:dev\"",
     "build": "tsc -b && vite build",

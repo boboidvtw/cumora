@@ -1,3 +1,19 @@
+/**
+ * Deletes storage objects and agent runtimes after a workspace is removed.
+ *
+ * Jobs are claimed with `FOR UPDATE SKIP LOCKED` and a lease, so two
+ * replicas do not take the same row. There is no attempt cap and no
+ * dead-letter: `markFailed` backs off to at most one hour and the row
+ * stays claimable forever. `realtime-outbox.ts` is the sibling that does
+ * cap attempts.
+ *
+ * `WORKSPACE_RUNTIME_CLEANUP_ENABLED=false` makes runtime deletion return
+ * without error. The job is then marked completed, so turning the flag on
+ * later does not replay it.
+ *
+ * Reference checks scan attachments and document bytes without a tenant
+ * predicate. That is the current behavior, not a bounded per-company lookup.
+ */
 import { randomUUID } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import { pool } from './db/pool.js'

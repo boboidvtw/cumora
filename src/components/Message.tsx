@@ -1874,7 +1874,7 @@ function MessageRowImpl({ msg, author, delay = 0, animate = true }: MessageRowPr
               <polyline points="9 17 4 12 9 7" />
               <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
             </svg>
-            {msg.replyCount} {msg.replyCount === 1 ? 'reply' : 'replies'}
+            {msg.replyCount} {msg.replyCount === 1 ? t('thread.reply') : t('thread.replyPlural')}
           </button>
         )}
 
