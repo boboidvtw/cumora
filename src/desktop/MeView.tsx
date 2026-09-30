@@ -1477,7 +1477,7 @@ function DaemonUpgradeBanner({ onJump }: { onJump: () => void }) {
               <>
                 {' '}{one ? t('me.daemonAutoHelp') : t('me.daemonAutoHelpPlural')}
                 {manual.length > 0 && (
-                  <>{' '}({manual.map((c) => c.name).join(', ')} {manual.length === 1 ? t('me.daemonManualInfix') : t('me.daemonManualInfixPlural')} {t('me.daemonManualRun')} — Ctrl-C and re-run there instead.)</>
+                  <>{' '}({manual.map((c) => c.name).join(', ')} {manual.length === 1 ? t('me.daemonManualInfix') : t('me.daemonManualInfixPlural')} {t('me.daemonManualRun')} {t('me.daemonManualRestartTail')})</>
                 )}
               </>
             )}

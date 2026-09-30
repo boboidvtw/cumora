@@ -34,6 +34,7 @@ const TAB_LABEL_KEY: Record<LibTab, MessageKey> = {
 
 export function MobileLibrary() {
   // i18n: prefer the translated key, fall back to the inline English.
+  const t = useT()
   const tLabel = useTLabel()
   const [tab, setTab] = useState<LibTab>('documents')
   const create = useDocuments((s) => s.create)
@@ -71,10 +72,10 @@ export function MobileLibrary() {
         style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
         <div className="px-4 pt-2 pb-2">
           <h1 className="font-display font-medium text-[26px] tracking-tight text-ink-900 leading-none">
-            Library
+            {t('nav.library')}
           </h1>
           <div className="text-[12.5px] text-ink-500 mt-0.5 font-display italic">
-            documents, boards & schedule
+            {t('mlib.subtitle')}
           </div>
         </div>
         <div className="px-3 pb-3 flex gap-1.5">
@@ -114,7 +115,7 @@ export function MobileLibrary() {
         type="button"
         onClick={onPlus}
         disabled={creating}
-        aria-label={tab === 'documents' ? 'New document' : tab === 'boards' ? 'New board' : 'New event'}
+        aria-label={tab === 'documents' ? t('docs.newDocument') : tab === 'boards' ? t('boards.newBoard') : t('event.newEvent')}
         className="absolute right-4 bottom-4 z-20 w-14 h-14 rounded-full grid place-items-center text-white active:scale-95 transition disabled:opacity-50"
         style={{
           background: tab === 'documents'
@@ -166,13 +167,13 @@ function DocumentsList() {
       )}
       {loaded && list.length === 0 && (
         <div className="px-6 py-12 text-center text-[13px] text-ink-500 font-display italic leading-relaxed">
-          No documents yet. Tap the + to create one — humans and agents both edit live.
+          {t('mlib.docsEmpty')}
         </div>
       )}
       <div className="divide-y divide-ink-100">
         {list.map((d) => {
           const author = byId[d.createdBy]
-          const authorName = author?.name ?? (d.createdBy === me?.id ? 'You' : d.createdBy)
+          const authorName = author?.name ?? (d.createdBy === me?.id ? t('common.you') : d.createdBy)
           return (
             <button
               type="button"
@@ -217,13 +218,13 @@ function BoardsList() {
       )}
       {!loadingList && list.length === 0 && (
         <div className="px-6 py-12 text-center text-[13px] text-ink-500 font-display italic leading-relaxed">
-          No boards yet. Tap the + to start one — agents can move cards through it on their own.
+          {t('mlib.boardsEmpty')}
         </div>
       )}
       <div className="divide-y divide-ink-100">
         {list.map((b) => {
           const author = byId[b.createdBy]
-          const authorName = author?.name ?? (b.createdBy === me?.id ? 'You' : b.createdBy)
+          const authorName = author?.name ?? (b.createdBy === me?.id ? t('common.you') : b.createdBy)
           return (
             <button
               type="button"

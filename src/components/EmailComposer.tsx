@@ -81,6 +81,7 @@ function PillField({
   placeholder: string
   autocompletePool: Participant[]
 }) {
+  const t = useT()
   const [draft, setDraft] = useState('')
   const [openSuggest, setOpenSuggest] = useState(false)
   const byId = useParticipants((s) => s.byId)
@@ -141,7 +142,7 @@ function PillField({
               type="button"
               onClick={(ev) => { ev.stopPropagation(); onChange(entries.filter((x) => x.raw !== e.raw)) }}
               className="ml-0.5 text-ink-300 hover:text-coral-deep leading-none"
-              aria-label={`Remove ${e.display}`}
+              aria-label={t('email.removeAria', { name: e.display })}
             >×</button>
           </span>
         ))}
@@ -436,7 +437,7 @@ export function EmailComposer() {
 
         {!isReply && (
           <PillField
-            label="To"
+            label={t('email.toLabel')}
             entries={to}
             onChange={setTo}
             placeholder={t('email.toPlaceholder')}
@@ -520,7 +521,7 @@ export function EmailComposer() {
                   type="button"
                   onClick={() => removeAttachment(a.localId)}
                   className="shrink-0 text-ink-300 hover:text-coral-deep text-[16px] leading-none px-1"
-                  aria-label={`Remove ${a.filename}`}
+                  aria-label={t('email.removeAria', { name: a.filename })}
                 >×</button>
               </div>
             ))}
@@ -547,7 +548,7 @@ export function EmailComposer() {
             disabled={sending}
             className="py-2 px-2.5 text-[12px] font-semibold text-ink-700 bg-cloud border border-ink-100 rounded-[7px] hover:border-sky2-200 hover:text-skype-deep transition disabled:opacity-50"
             title={t('email.attachFile')}
-          >📎 Attach</button>
+          >📎 {t('email.attachBtn')}</button>
           <span className="text-[11px] mr-auto" style={{ color: 'var(--email-muted)' }}>
             {t('email.fromLabel')} <span className="font-mono text-ink-500">{me?.email ?? t('email.noAuthEmail')}</span>
           </span>

@@ -3,8 +3,10 @@ import { useApp } from '@/stores/app'
 import { useCalendar } from '@/stores/calendar'
 import { useResolvedCalendarId } from '@/lib/useArtifactId'
 import { ICalendar } from './icons'
+import { useT } from '@/lib/i18n'
 
 export function CalendarLink({ id: rawId }: { id: string }) {
+  const t = useT()
   // Resolve a git-style short id (e.g. `ce-d53fa1f5`) to the full event id.
   const id = useResolvedCalendarId(rawId)
   const setView = useApp((s) => s.setView)
@@ -34,8 +36,8 @@ export function CalendarLink({ id: rawId }: { id: string }) {
       }}
       className="inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-sky2-100 bg-sky2-50 px-2 py-0.5 text-[13px] font-semibold text-skype-deep no-underline transition hover:border-sky2-200 hover:bg-sky2-100"
       style={{ verticalAlign: '-0.16em' }}
-      title={`Open calendar event ${id}`}
-      aria-label={`Open calendar event ${label}`}
+      title={t('msgview.openEventAria', { title: id })}
+      aria-label={t('msgview.openEventAria', { title: label })}
     >
       <ICalendar className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{label}</span>

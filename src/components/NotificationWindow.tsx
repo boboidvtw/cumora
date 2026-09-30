@@ -338,7 +338,7 @@ function ToastCard({ toast, onClick, onDismiss }: { toast: Toast; onClick: () =>
                 // looked like a foreign dialect of the same color family.
                 className="ml-auto inline-grid place-items-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold shrink-0 tabular-nums"
                 style={{ background: 'var(--coral)', color: 'white' }}
-                title={`${toast.unreadCount} unread in this conversation`}
+                title={t('notif.unreadInConvo', { n: toast.unreadCount })}
               >{toast.unreadCount}</span>
             )}
           </div>

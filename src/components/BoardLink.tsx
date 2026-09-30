@@ -3,8 +3,10 @@ import { useApp } from '@/stores/app'
 import { useBoards } from '@/stores/boards'
 import { useResolvedBoardId } from '@/lib/useArtifactId'
 import { IBoard } from './icons'
+import { useT } from '@/lib/i18n'
 
 export function BoardLink({ id: rawId }: { id: string }) {
+  const t = useT()
   // Resolve a git-style short id (e.g. `board-ab12`) to the full board id.
   const id = useResolvedBoardId(rawId)
   const setView = useApp((s) => s.setView)
@@ -37,8 +39,8 @@ export function BoardLink({ id: rawId }: { id: string }) {
       }}
       className="inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-sky2-100 bg-sky2-50 px-2 py-0.5 text-[13px] font-semibold text-skype-deep no-underline transition hover:border-sky2-200 hover:bg-sky2-100"
       style={{ verticalAlign: '-0.16em' }}
-      title={`Open board ${id}`}
-      aria-label={`Open board ${label}`}
+      title={t('msgview.openBoardAria', { title: id })}
+      aria-label={t('msgview.openBoardAria', { title: label })}
     >
       <IBoard className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{label}</span>

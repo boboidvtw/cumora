@@ -404,8 +404,8 @@ function ToastCard({ toast, onClick, onDismiss }: { toast: Toast; onClick: () =>
               <span
                 className="ml-auto text-[9.5px] font-bold py-px px-1.5 rounded-full shrink-0"
                 style={{ background: 'var(--sky-100)', color: 'var(--skype-deep)' }}
-                title={`${toast.count - 1} more message${toast.count - 1 === 1 ? '' : 's'} from this conversation`}
-              >+{toast.count - 1} more</span>
+                title={t(toast.count - 1 === 1 ? 'notif.moreFromConvo' : 'notif.moreFromConvoPlural', { n: toast.count - 1 })}
+              >{t('notif.plusMore', { n: toast.count - 1 })}</span>
             )}
           </div>
           <div

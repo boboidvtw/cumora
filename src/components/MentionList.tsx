@@ -14,6 +14,7 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import type { Participant } from '@/types'
 import { Avatar } from './Avatar'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 
 export interface MentionListHandle {
   onKeyDown: (props: { event: KeyboardEvent }) => boolean
@@ -27,6 +28,7 @@ export interface MentionListProps {
 export const MentionList = forwardRef<MentionListHandle, MentionListProps>(function MentionList(
   { items, command }, ref,
 ) {
+  const t = useT()
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   // Clamp when the candidate list changes so an arrow-key-driven index
@@ -60,7 +62,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   if (items.length === 0) {
     return (
       <div className="rounded-lg bg-cloud border border-ink-100 shadow-lg px-3 py-2 text-xs text-ink-400">
-        no match
+        {t('chat.searchNoMatch')}
       </div>
     )
   }

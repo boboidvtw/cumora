@@ -3,9 +3,11 @@ import { useApp } from '@/stores/app'
 import { useBoards } from '@/stores/boards'
 import { useResolvedCardId } from '@/lib/useArtifactId'
 import { IBoard } from './icons'
+import { useT } from '@/lib/i18n'
 import type { BoardCardLookup } from '@/types'
 
 export function CardLink({ id: rawId }: { id: string }) {
+  const t = useT()
   // Resolve a git-style short id to the full card id (best-effort: cards are
   // only loaded per opened board, so an unopened board's card stays short).
   const id = useResolvedCardId(rawId)
@@ -51,8 +53,8 @@ export function CardLink({ id: rawId }: { id: string }) {
       }}
       className="inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-sky2-100 bg-sky2-50 px-2 py-0.5 text-[13px] font-semibold text-skype-deep no-underline transition hover:border-sky2-200 hover:bg-sky2-100"
       style={{ verticalAlign: '-0.16em' }}
-      title={`Open card ${id}`}
-      aria-label={`Open card ${label}`}
+      title={t('msgview.openCardAria', { title: id })}
+      aria-label={t('msgview.openCardAria', { title: label })}
     >
       <IBoard className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{label}</span>

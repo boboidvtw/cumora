@@ -3,8 +3,10 @@ import { useApp } from '@/stores/app'
 import { useDocuments } from '@/stores/documents'
 import { useResolvedDocumentId } from '@/lib/useArtifactId'
 import { IFile } from './icons'
+import { useT } from '@/lib/i18n'
 
 export function DocumentLink({ id: rawId }: { id: string }) {
+  const t = useT()
   // Resolve a git-style short id (e.g. `doc_ab12`) to the full document id.
   const id = useResolvedDocumentId(rawId)
   const setView = useApp((s) => s.setView)
@@ -32,8 +34,8 @@ export function DocumentLink({ id: rawId }: { id: string }) {
       }}
       className="inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-sky2-100 bg-sky2-50 px-2 py-0.5 text-[13px] font-semibold text-skype-deep no-underline transition hover:border-sky2-200 hover:bg-sky2-100"
       style={{ verticalAlign: '-0.16em' }}
-      title={`Open document ${id}`}
-      aria-label={`Open document ${label}`}
+      title={t('msgview.openDocumentAria', { title: id })}
+      aria-label={t('msgview.openDocumentAria', { title: label })}
     >
       <IFile className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{label}</span>

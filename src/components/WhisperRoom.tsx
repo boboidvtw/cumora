@@ -288,6 +288,7 @@ export function WhisperRoom({ pairId }: { pairId: string }) {
 }
 
 export function WhisperInspector({ pairId }: { pairId: string }) {
+  const t = useT()
   const list = useWhispers((s) => s.list)
   const byIdList = useWhispers((s) => s.byId)
   const streaming = useWhispers((s) => s.streaming)
@@ -318,9 +319,9 @@ export function WhisperInspector({ pairId }: { pairId: string }) {
           background: 'radial-gradient(circle at 50% 0%, var(--whisper-100), transparent 70%)',
           borderColor: 'var(--whisper-100)',
         }}>
-        <div className="text-[9.5px] font-extrabold text-whisper tracking-[0.18em] uppercase mb-2">Whisper · {messages.length} messages</div>
+        <div className="text-[9.5px] font-extrabold text-whisper tracking-[0.18em] uppercase mb-2">{t('whisper.headerCount', { n: messages.length })}</div>
         <h3 className="font-display font-medium text-[20px] tracking-tight mb-1.5">
-          {whisper.about ?? whisper.title ?? 'private thread'}
+          {whisper.about ?? whisper.title ?? t('whisper.privateThread')}
         </h3>
         <div className="font-display italic text-[12px] leading-[1.6] text-ink-500 px-1.5">
           opened {new Date(whisper.createdAt).toLocaleString()}
@@ -329,7 +330,7 @@ export function WhisperInspector({ pairId }: { pairId: string }) {
 
       <div className="py-4 px-5 border-b border-whisper-100">
         <h4 className="text-[10.5px] font-extrabold text-whisper tracking-[0.12em] uppercase mb-2.5">
-          {ms.length === 2 ? 'The two voices' : `${ms.length} voices`}
+          {ms.length === 2 ? t('whisper.twoVoices') : t('whisper.nVoices', { n: ms.length })}
         </h4>
         <div className={cn(
           'grid gap-3',

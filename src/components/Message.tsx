@@ -296,6 +296,7 @@ const ConversationIdContext = createContext<string | null>(null)
  *  message hasn't been loaded yet, falls back to plain `#N` text so the
  *  reference is never silently dropped. */
 function MessageRefChip({ n }: { n: number }) {
+  const t = useT()
   const convoId = useContext(ConversationIdContext)
   const target = useMessages((s) => {
     if (!convoId) return null
@@ -334,7 +335,7 @@ function MessageRefChip({ n }: { n: number }) {
         // the chip on the CJK glyph center; -0.15em (the MentionChip value)
         // visibly sits low here because there's no avatar to anchor it.
         style={{ verticalAlign: '-0.05em' }}
-        title={`Jump to message #${n}`}
+        title={t('msgview.jumpToMessage', { n })}
         role="link"
       >
         {/* Cap the inner height + line-height so the chip is a stable 20px
@@ -563,13 +564,13 @@ function artifactRefsForMessage(msg: Message): ArtifactRef[] {
   return Array.from(out.values())
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: ReturnType<typeof useT>): string {
   const then = new Date(iso).getTime()
   const ms = Date.now() - then
-  if (!Number.isFinite(then)) return 'recently'
-  if (ms < 60_000) return 'just now'
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`
+  if (!Number.isFinite(then)) return t('common.recently')
+  if (ms < 60_000) return t('docs.justNow')
+  if (ms < 3_600_000) return t('docs.minutesAgo', { n: Math.floor(ms / 60_000) })
+  if (ms < 86_400_000) return t('docs.hoursAgo', { n: Math.floor(ms / 3_600_000) })
   return new Date(iso).toLocaleDateString()
 }
 
@@ -589,7 +590,7 @@ function DocumentArtifactCard({ id: rawId, conversationId }: { id: string; conve
 
   const title = doc?.title?.trim() || (loaded ? t('docs.unavailable') : t('docs.opening'))
   const author = doc ? byId[doc.createdBy]?.name ?? doc.createdBy : null
-  const updated = doc ? timeAgo(doc.updatedAt) : null
+  const updated = doc ? timeAgo(doc.updatedAt, t) : null
   const isPinnedHere = doc?.conversationId === conversationId
 
   const open = () => {
@@ -602,7 +603,7 @@ function DocumentArtifactCard({ id: rawId, conversationId }: { id: string; conve
       type="button"
       onClick={open}
       className="mt-2 group block w-full max-w-[min(100%,580px)] text-left rounded-[12px] border border-ink-100 bg-cloud overflow-hidden transition hover:border-sky2-200 hover:shadow-[0_16px_34px_-22px_rgba(0,80,140,0.42)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky2-300"
-      aria-label={`Open document ${title}`}
+      aria-label={t('msgview.openDocumentAria', { title })}
     >
       <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] gap-3 px-3 py-3 items-center">
         <div
@@ -631,7 +632,7 @@ function DocumentArtifactCard({ id: rawId, conversationId }: { id: string; conve
           <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[11.5px] text-ink-500">
             {author && <span className="truncate">{author}</span>}
             {author && updated && <span className="w-1 h-1 rounded-full bg-ink-200 shrink-0" />}
-            {updated && <span className="shrink-0">Updated {updated}</span>}
+            {updated && <span className="shrink-0">{t('common.updatedAgo', { time: updated })}</span>}
             {isPinnedHere && (
               <>
                 <span className="w-1 h-1 rounded-full bg-ink-200 shrink-0" />
@@ -697,7 +698,7 @@ function BoardArtifactCard({ id: rawId }: { id: string }) {
       type="button"
       onClick={open}
       className="mt-2 group block w-full max-w-[min(100%,580px)] text-left rounded-[12px] border border-ink-100 bg-cloud overflow-hidden transition hover:border-sky2-200 hover:shadow-[0_16px_34px_-24px_rgba(0,80,140,0.24)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky2-200"
-      aria-label={`Open board ${title}`}
+      aria-label={t('msgview.openBoardAria', { title })}
     >
       <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] gap-3 px-3 py-3 items-center">
         <div className="relative w-[52px] h-[64px] rounded-[9px] bg-white border border-sky2-100 shadow-[0_10px_24px_-22px_rgba(0,80,140,0.22)] overflow-hidden" aria-hidden>
@@ -720,13 +721,13 @@ function BoardArtifactCard({ id: rawId }: { id: string }) {
           </div>
           <div className="mt-1 text-[14px] font-semibold text-ink-900 truncate">{title}</div>
           <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[11.5px] text-ink-500">
-            {columns !== null && <span>{columns} columns</span>}
+            {columns !== null && <span>{t('msgview.boardColumns', { n: columns })}</span>}
             {columns !== null && cards !== null && <span className="w-1 h-1 rounded-full bg-ink-200 shrink-0" />}
-            {cards !== null && <span>{cards} cards</span>}
+            {cards !== null && <span>{t('msgview.boardCards', { n: cards })}</span>}
             {updated && (
               <>
                 <span className="w-1 h-1 rounded-full bg-ink-200 shrink-0" />
-                <span className="shrink-0">Updated {timeAgo(updated)}</span>
+                <span className="shrink-0">{t('common.updatedAgo', { time: timeAgo(updated, t) })}</span>
               </>
             )}
           </div>
@@ -764,7 +765,7 @@ function CardArtifactCard({ id: rawId }: { id: string }) {
   const card = lookup?.card ?? null
   const assignee = card?.assigneeId ? byId[card.assigneeId]?.name ?? card.assigneeId : null
   const title = card?.title.trim() || (failed ? t('boards.cardUnavailable') : t('boards.openingCard'))
-  const updated = card?.updatedAt ? timeAgo(card.updatedAt) : null
+  const updated = card?.updatedAt ? timeAgo(card.updatedAt, t) : null
   const location = lookup ? `${lookup.board.title} -> ${lookup.column.title}` : id
 
   const open = () => {
@@ -786,7 +787,7 @@ function CardArtifactCard({ id: rawId }: { id: string }) {
       type="button"
       onClick={open}
       className="mt-2 group block w-full max-w-[min(100%,580px)] text-left rounded-[12px] border border-ink-100 bg-cloud overflow-hidden transition hover:border-sky2-200 hover:shadow-[0_16px_34px_-24px_rgba(0,80,140,0.24)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky2-200"
-      aria-label={`Open card ${title}`}
+      aria-label={t('msgview.openCardAria', { title })}
     >
       <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] gap-3 px-3 py-3 items-center">
         <div className="relative w-[52px] h-[64px] rounded-[9px] bg-white border border-sky2-100 shadow-[0_10px_24px_-22px_rgba(0,80,140,0.22)] overflow-hidden" aria-hidden>
@@ -819,7 +820,7 @@ function CardArtifactCard({ id: rawId }: { id: string }) {
             {updated && (
               <>
                 <span className="w-1 h-1 rounded-full bg-ink-200 shrink-0" />
-                <span className="shrink-0">Updated {updated}</span>
+                <span className="shrink-0">{t('common.updatedAgo', { time: updated })}</span>
               </>
             )}
           </div>
@@ -866,7 +867,7 @@ function CalendarArtifactCard({ id: rawId }: { id: string }) {
       type="button"
       onClick={() => openCalendarEventPeek(id)}
       className="mt-2 group block w-full max-w-[min(100%,580px)] text-left rounded-[12px] border border-ink-100 bg-cloud overflow-hidden transition hover:border-sky2-200 hover:shadow-[0_16px_34px_-24px_rgba(0,168,240,0.20)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky2-200"
-      aria-label={`Open calendar event ${title}`}
+      aria-label={t('msgview.openEventAria', { title })}
     >
       <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] gap-3 px-3 py-3 items-center">
         <div className="relative w-[52px] h-[64px] rounded-[9px] bg-white border border-sky2-100 shadow-[0_10px_24px_-22px_rgba(0,168,240,0.18)] overflow-hidden" aria-hidden>
@@ -1147,9 +1148,9 @@ function EmailCard({ msg }: { msg: Message }) {
                   : 'text-ink-400 hover:text-ink-700 hover:bg-[rgba(120,110,95,0.10)]',
               )}
               aria-pressed={showHtml}
-              title={showHtml ? 'Hide HTML version' : 'Show HTML version'}
+              title={showHtml ? t('msgview.hideHtml') : t('msgview.showHtml')}
             >
-              {showHtml ? 'plain' : 'html'}
+              {showHtml ? t('msgview.togglePlain') : t('msgview.toggleHtml')}
             </button>
           )}
           {e.smtpMessageId && (
@@ -1184,7 +1185,7 @@ function EmailCard({ msg }: { msg: Message }) {
           )}
           {htmlError && (
             <div className="px-3 py-3 text-[12px] text-coral-deep">
-              couldn't load html: {htmlError}
+              {t('msgview.htmlLoadFailed', { error: htmlError })}
             </div>
           )}
           {htmlBody !== null && !htmlError && (
@@ -1233,6 +1234,7 @@ function humanSize(n: number): string {
 }
 
 function EmailAttachmentRow({ att }: { att: NonNullable<NonNullable<Message['email']>['attachments']>[number] }) {
+  const t = useT()
   const isImg = att.mimeType.startsWith('image/')
   const isPdf = att.mimeType === 'application/pdf'
   const icon = isImg ? '🖼' : isPdf ? '📄' : '📎'
@@ -1243,7 +1245,7 @@ function EmailAttachmentRow({ att }: { att: NonNullable<NonNullable<Message['ema
         <div className="truncate font-medium">{att.filename}</div>
         <div className="text-[10.5px] text-ink-400 uppercase tracking-wider">
           {att.mimeType}{att.sizeBytes > 0 && ` · ${humanSize(att.sizeBytes)}`}
-          {att.truncated && ' · skipped (too large)'}
+          {att.truncated && t('msgview.attachmentSkipped')}
         </div>
       </div>
       {att.url ? (
@@ -1449,6 +1451,7 @@ function ReactionBurst() {
 }
 
 function QuickReactionButton({ msgId, emoji }: { msgId: string; emoji: string }) {
+  const t = useT()
   const [burst, setBurst] = useState(0)
   return (
     <button
@@ -1458,8 +1461,8 @@ function QuickReactionButton({ msgId, emoji }: { msgId: string; emoji: string })
         void toggleReaction(msgId, emoji)
       }}
       className="reaction-control reaction-quick-button w-6 h-6 rounded-full hover:bg-sky2-50 grid place-items-center"
-      title={`React ${emoji}`}
-      aria-label={`React ${emoji}`}
+      title={t('msgview.reactWith', { emoji })}
+      aria-label={t('msgview.reactWith', { emoji })}
     >
       <TwEmoji emoji={emoji} size={16} />
       {burst > 0 && <ReactionBurst key={burst} />}
