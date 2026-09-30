@@ -112,7 +112,7 @@ export function AdminApp() {
         </button>
         <div className="admin-topbar-brand">
           <CloudLogo size={24} />
-          <span>cumora admin</span>
+          <span>{t('admin.brandTitle')}</span>
         </div>
         <div className="admin-topbar-spacer" />
       </header>
@@ -121,7 +121,7 @@ export function AdminApp() {
         <div className="admin-brand">
           <CloudLogo size={32} />
           <div>
-            <div className="admin-brand-title">cumora admin</div>
+            <div className="admin-brand-title">{t('admin.brandTitle')}</div>
             <div className="admin-brand-sub">{user?.email}</div>
           </div>
         </div>

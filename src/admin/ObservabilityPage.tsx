@@ -709,7 +709,7 @@ function TrendChart({ buckets, unit, loading, t }: { buckets: LlmTrendBucket[]; 
 
   return (
     <div className="obs-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Daily cost by purpose">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={t('adminobs.trendCostTitle')}>
         {/* Grid */}
         {ticks.map((t, i) => (
           <g key={i}>
@@ -926,7 +926,7 @@ function CacheDailyChart({ days, loading, t }: {
 
   return (
     <div className="obs-cache-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Daily cache hit rate">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={t('adminobs.cacheDailyAria')}>
         <defs>
           <linearGradient id="obsCacheGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--skype-deep)" stopOpacity={0.18} />

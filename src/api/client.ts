@@ -1,4 +1,6 @@
 import { getActiveCompanyId, getAuthToken, useAuth } from '@/stores/auth'
+import { t as translateNow } from '@/lib/i18n'
+import { localizeApiError } from '@/lib/localize-api-error'
 import type {
   BoardCardComment, BoardCardLookup, BoardSnapshot, BoardSummary,
   CalendarDispatch, CalendarEvent, CalendarEventKind, CalendarEventStatus,
@@ -129,6 +131,8 @@ export async function http<T>(path: string, init?: RequestInit): Promise<T> {
         } catch { detail = text.slice(0, 200) }
       }
     } catch { /* ignore */ }
+    // Known server sentences are shown in the viewer's language.
+    if (detail) detail = localizeApiError(detail, translateNow)
     throw new ApiError(detail ? `${detail} (${res.status})` : `${res.status} ${res.statusText}`, res.status)
   }
   return res.json() as Promise<T>
