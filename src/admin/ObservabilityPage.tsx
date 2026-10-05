@@ -996,11 +996,11 @@ function CachePurposeBar({ purpose, hitRate, savableUsd, costUsd, uncachedIn, ca
         {unit === 'usd'
           ? <>
               {savableUsd > 0 ? <span className="obs-cache-bar-savable-amt">{fmtUsd(savableUsd, savableUsd < 1 ? 4 : 2)}</span> : <span className="obs-cache-bar-savable-na">—</span>}
-              <span className="obs-cache-bar-savable-sub"> of {fmtUsd(costUsd, costUsd < 1 ? 4 : 2)}</span>
+              <span className="obs-cache-bar-savable-sub">{t('adminobs.savableOfUsd', { total: fmtUsd(costUsd, costUsd < 1 ? 4 : 2) })}</span>
             </>
           : <>
               {uncachedIn > 0 ? <span className="obs-cache-bar-savable-amt">{fmtTokens(uncachedIn)}</span> : <span className="obs-cache-bar-savable-na">—</span>}
-              <span className="obs-cache-bar-savable-sub"> of {fmtTokens(uncachedIn + cachedIn)} in</span>
+              <span className="obs-cache-bar-savable-sub">{t('adminobs.savableOfTokens', { total: fmtTokens(uncachedIn + cachedIn) })}</span>
             </>}
       </div>
     </div>

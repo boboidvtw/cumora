@@ -48,7 +48,7 @@ export function MobileMe() {
     return {
       id: authUser?.id ?? 'me',
       kind: 'human',
-      name: authUser?.name ?? 'You',
+      name: authUser?.name ?? t('common.you'),
       initial: (authUser?.name ?? 'Y').charAt(0).toUpperCase(),
       avatarBg: 'linear-gradient(135deg, #FF7A6B, #F4B740)',
       status: 'avail',

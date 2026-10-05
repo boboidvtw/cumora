@@ -15,13 +15,18 @@ import { EventEditor, type EventEditorPrefill } from '@/components/EventEditor'
 import { Avatar } from '@/components/Avatar'
 import { ICalendar, IClock, IRepeat } from '@/components/icons'
 import { tapHaptic } from '@/lib/native'
-import { useT } from '@/lib/i18n'
+import { useT, type MessageKey } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { nextOccurrenceOnOrAfter } from '@/lib/recurrence'
 import type { CalendarEvent } from '@/types'
 
 const DAY_MS = 86_400_000
 const WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+// i18n: parallel lookup so WEEK above stays upstream-mergeable.
+const WEEK_KEY: MessageKey[] = [
+  'event.weekdaySun', 'event.weekdayMon', 'event.weekdayTue', 'event.weekdayWed',
+  'event.weekdayThu', 'event.weekdayFri', 'event.weekdaySat',
+]
 
 interface AgendaItem {
   event: CalendarEvent
@@ -203,7 +208,7 @@ export function MobileCalendar() {
 
       {/* Weekday row */}
       <div className="grid grid-cols-7 px-3 pt-1 pb-1.5 text-[10px] uppercase tracking-wide text-ink-400 select-none">
-        {WEEK.map((d) => <div key={d} className="text-center">{d}</div>)}
+        {WEEK.map((d, i) => <div key={d} className="text-center">{t(WEEK_KEY[i])}</div>)}
       </div>
 
       {/* Month grid — always 6 rows visible. Cells are tall enough to

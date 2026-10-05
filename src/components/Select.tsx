@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 
 export interface SelectOption<T extends string = string> {
   value: T
@@ -43,6 +44,7 @@ export function Select<T extends string = string>({
   disabled = false,
   className,
 }: SelectProps<T>) {
+  const t = useT()
   const autoId = useId()
   const selectId = id ?? autoId
   const rootRef = useRef<HTMLDivElement>(null)
@@ -157,7 +159,7 @@ export function Select<T extends string = string>({
           backgroundImage: 'var(--select-face)',
         }}
       >
-        <span className="min-w-0 flex-1 truncate">{(selected?.label ?? value) || 'Select'}</span>
+        <span className="min-w-0 flex-1 truncate">{(selected?.label ?? value) || t('common.select')}</span>
         <span
           aria-hidden="true"
           className={cn(

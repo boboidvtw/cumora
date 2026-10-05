@@ -193,7 +193,7 @@ export function WhisperRoom({ pairId }: { pairId: string }) {
   const meFallback: Participant = {
     id: authUser?.id ?? 'me',
     kind: 'human',
-    name: authUser?.name ?? 'You',
+    name: authUser?.name ?? t('common.you'),
     initial: (authUser?.name ?? 'Y').charAt(0).toUpperCase(),
     avatarBg: 'linear-gradient(135deg, #FF7A6B, #F4B740)',
     status: 'avail',
@@ -324,7 +324,7 @@ export function WhisperInspector({ pairId }: { pairId: string }) {
           {whisper.about ?? whisper.title ?? t('whisper.privateThread')}
         </h3>
         <div className="font-display italic text-[12px] leading-[1.6] text-ink-500 px-1.5">
-          opened {new Date(whisper.createdAt).toLocaleString()}
+          {t('whisper.openedAt', { time: new Date(whisper.createdAt).toLocaleString() })}
         </div>
       </div>
 
@@ -342,7 +342,7 @@ export function WhisperInspector({ pairId }: { pairId: string }) {
               <div className="text-[12px] font-bold text-ink-900 mt-1.5">{p.name}</div>
               {p.role && <div className="font-display italic text-[10px] text-ink-500 mb-2">{p.role}</div>}
               <div className="font-display text-[22px] font-medium text-whisper-deep leading-none" style={{ letterSpacing: '-0.02em' }}>{turnsByAuthor[p.id] ?? 0}</div>
-              <div className="text-[9px] font-bold text-ink-300 uppercase tracking-wider mt-0.5">turns</div>
+              <div className="text-[9px] font-bold text-ink-300 uppercase tracking-wider mt-0.5">{t('whisper.turns')}</div>
             </div>
           ))}
         </div>

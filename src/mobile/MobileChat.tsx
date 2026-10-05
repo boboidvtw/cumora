@@ -1122,7 +1122,7 @@ export function MobileChatInfo() {
     if (!convoId || busy) return
     setBusy(true)
     try {
-      await api.startConvene(convoId, c.title || 'live work session')
+      await api.startConvene(convoId, c.title || t('convene.sessionTitleFallback'))
       setView('convene')
     } catch (err) { console.warn('start convene failed', err) }
     setBusy(false)

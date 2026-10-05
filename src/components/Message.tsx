@@ -894,7 +894,7 @@ function CalendarArtifactCard({ id: rawId }: { id: string }) {
             {event?.kind === 'agent_task' && assignee && (
               <>
                 <span className="w-1 h-1 rounded-full bg-ink-200 shrink-0" />
-                <span className="truncate">for {assignee}</span>
+                <span className="truncate">{t('msgview.forAssignee', { name: assignee })}</span>
               </>
             )}
             {event?.status && (
@@ -1256,10 +1256,10 @@ function EmailAttachmentRow({ att }: { att: NonNullable<NonNullable<Message['ema
           download={att.filename}
           className="shrink-0 text-[11.5px] font-semibold text-skype-deep hover:underline"
         >
-          download
+          {t('msgview.attDownload')}
         </a>
       ) : (
-        <span className="shrink-0 text-[11.5px] text-ink-300 italic">unavailable</span>
+        <span className="shrink-0 text-[11.5px] text-ink-300 italic">{t('msgview.attUnavailable')}</span>
       )}
     </div>
   )
@@ -1369,6 +1369,7 @@ interface MessageRowProps {
 const QUICK_REACTIONS = ['👍', '❤️', '👀', '🌤️', '🔥', '👏', '✅', '🎯', '📌']
 
 function ReactionPill({ msgId, r }: { msgId: string; r: import('@/types').ReactionEntry }) {
+  const t = useT()
   const byId = useParticipants((s) => s.byId)
   const meId = useMe()
   const [burst, setBurst] = useState(0)
@@ -1377,7 +1378,7 @@ function ReactionPill({ msgId, r }: { msgId: string; r: import('@/types').Reacti
     const me: string[] = []
     const others: string[] = []
     for (const uid of userIds) {
-      if (uid === meId) { me.push('You'); continue }
+      if (uid === meId) { me.push(t('common.you')); continue }
       const name = byId[uid]?.name
       if (!name) continue  // participant not loaded → omit, never leak raw id
       others.push(name)
@@ -1673,7 +1674,7 @@ function QuoteCard({ msg }: { msg: Message }) {
   }
   const authorName = summary.authorName ?? byId[summary.authorId]?.name ?? summary.authorId
   const bodyPreview = summary.kind === 'tool'
-    ? '[tool call]'
+    ? t('msgview.toolCall')
     : summary.body.slice(0, 140).replace(/\n/g, ' ')
   return (
     <button

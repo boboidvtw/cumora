@@ -16,7 +16,7 @@
  * - Soft de-dup: never toast messages authored by the current user.
  */
 import { useEffect, useRef, useState } from 'react'
-import { useT } from '@/lib/i18n'
+import { t as tNow, useT } from '@/lib/i18n'
 import { ws } from '@/api/client'
 import { useApp } from '@/stores/app'
 import { useMe } from '@/stores/auth'
@@ -206,7 +206,7 @@ export function NotificationToasts() {
             ...next[idx], authorId: e.mentionerId,
             at, count: next[idx].count + 1,
             conversationTitle: e.documentTitle,
-            body: `${e.mentionerName} @-mentioned you in “${e.documentTitle}”`,
+            body: tNow('notif.docMention', { name: e.mentionerName, title: e.documentTitle }),
           }
           return next
         }
@@ -216,7 +216,7 @@ export function NotificationToasts() {
           kind: 'doc.mention',
           documentId: e.documentId,
           authorId: e.mentionerId,
-          body: `${e.mentionerName} @-mentioned you in “${e.documentTitle}”`,
+          body: tNow('notif.docMention', { name: e.mentionerName, title: e.documentTitle }),
           conversationTitle: e.documentTitle,
           at, count: 1,
         }
@@ -246,10 +246,10 @@ export function NotificationToasts() {
         }
         queueMicrotask(playNotificationChime)
         const inText = e.leadMinutes <= 1
-          ? 'starting now'
+          ? tNow('notif.reminderNow')
           : e.leadMinutes < 60
-            ? `in ${e.leadMinutes} min`
-            : `in ${Math.round(e.leadMinutes / 60)}h`
+            ? tNow('notif.reminderInMin', { n: e.leadMinutes })
+            : tNow('notif.reminderInHours', { n: Math.round(e.leadMinutes / 60) })
         const fresh: Toast = {
           id: `toast-reminder-${e.eventId}-${at}`,
           kind: 'calendar.reminder',
@@ -257,7 +257,7 @@ export function NotificationToasts() {
           occurrenceAt: e.occurrenceAt,
           leadMinutes: e.leadMinutes,
           authorId: '',                          // unused — calendar icon shown
-          body: `Coming up ${inText}`,
+          body: tNow('notif.reminderBody', { when: inText }),
           conversationTitle: e.title,
           at, count: 1,
         }

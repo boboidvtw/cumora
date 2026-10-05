@@ -206,7 +206,7 @@ export function InviteAcceptScreen({ token, onDone }: Props) {
 
   const inv = preview?.invitation
   const companyName = inv?.company.name ?? 'Cumora'
-  const inviter = inv?.inviterName ?? 'Someone'
+  const inviter = inv?.inviterName ?? t('inviteAccept.someone')
   const signedIn = !!tokenStr && !!tokenUserId
 
   return (

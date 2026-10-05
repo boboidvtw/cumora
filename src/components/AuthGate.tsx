@@ -16,6 +16,7 @@ import { useAuth } from '@/stores/auth'
 import { isElectron } from '@/lib/runtime'
 import { AuthScreen } from './AuthScreen'
 import { WindowDragStrip } from './WindowDragStrip'
+import { useT } from '@/lib/i18n'
 
 interface AuthGateProps {
   children: ReactNode
@@ -44,6 +45,7 @@ function consumeOAuthFragment(): CarriedSession | null {
 
 
 export function AuthGate({ children, unauthFallback }: AuthGateProps) {
+  const t = useT()
   const token = useAuth((s) => s.token)
   const ready = useAuth((s) => s.ready)
   const setSession = useAuth((s) => s.setSession)
@@ -121,7 +123,7 @@ export function AuthGate({ children, unauthFallback }: AuthGateProps) {
       <div
         className="fixed inset-0 grid place-items-center text-ink-300 font-display italic text-[13px]"
         style={{ background: 'var(--paper)' }}
-      ><WindowDragStrip />loading…</div>
+      ><WindowDragStrip />{t('common.loading')}</div>
     )
   }
 

@@ -169,7 +169,7 @@ export function AuthScreen() {
           history.replaceState(null, '', location.pathname + location.search + hash)
           window.dispatchEvent(new CustomEvent('cumora:oauth-token', { detail: hash }))
         } catch (err) {
-          setErr(err instanceof Error ? err.message : 'sign-in failed')
+          setErr(err instanceof Error ? err.message : t('auth.signInFailed'))
           setBusy(null)
         }
       })()
@@ -268,7 +268,9 @@ function currentOriginLabel(t: ReturnType<typeof useT>): string {
   const origin = getServerOrigin()
   if (!origin) return t('auth.sameOrigin')
   const match = PRESETS.find((p) => p.origin === origin)
-  return match ? `${match.label} · ${origin}` : origin
+  if (!match) return origin
+  const label = PRESET_LABEL_KEY[match.label] ? t(PRESET_LABEL_KEY[match.label]) : match.label
+  return `${label} · ${origin}`
 }
 
 function ServerSwitch({ open, onToggle }: { open: boolean; onToggle: () => void }) {

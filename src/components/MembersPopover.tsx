@@ -8,11 +8,19 @@ import { Avatar } from './Avatar'
 import { HumanBadge } from './HumanBadge'
 import { useApp } from '@/stores/app'
 import { useMe } from '@/stores/auth'
-import { useT } from '@/lib/i18n'
+import { useT, type MessageKey } from '@/lib/i18n'
 import type { Participant } from '@/types'
 
 const STATUS_LABEL: Record<string, string> = {
   avail: 'Available', working: 'Working', thinking: 'Thinking', waiting: 'Waiting on you', resting: 'Resting',
+}
+// i18n: parallel lookup so STATUS_LABEL above stays upstream-mergeable.
+const STATUS_LABEL_KEY: Record<string, MessageKey> = {
+  avail: 'mpinfo.statusAvail',
+  working: 'mpinfo.statusWorking',
+  thinking: 'mpinfo.statusThinking',
+  waiting: 'mpinfo.statusWaiting',
+  resting: 'mpinfo.statusResting',
 }
 const STATUS_COLOR: Record<string, string> = {
   avail: 'var(--avail)', working: 'var(--working)', thinking: 'var(--thinking)', waiting: 'var(--waiting)', resting: 'var(--resting)',
@@ -113,7 +121,7 @@ export function MembersPopover({ members, anchor, triggerRef, onClose }: Props) 
                     className="inline-block w-1.5 h-1.5 rounded-full"
                     style={{ background: STATUS_COLOR[p.status] ?? 'var(--resting)' }}
                   />
-                  {STATUS_LABEL[p.status] ?? 'idle'}
+                  {STATUS_LABEL_KEY[p.status] ? t(STATUS_LABEL_KEY[p.status]) : (STATUS_LABEL[p.status] ?? t('common.idle'))}
                   {p.role && <><span className="text-ink-300">·</span><em className="not-italic font-display italic">{p.role}</em></>}
                 </div>
               </div>
