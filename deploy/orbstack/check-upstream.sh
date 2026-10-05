@@ -1,0 +1,100 @@
+#!/bin/sh
+# Check yetone/cumora for commits the zh-tw branch doesn't have yet, and send
+# a macOS notification when there are new ones. Never merges anything.
+#
+#   ./check-upstream.sh               # check now (always prints the list)
+#   ./check-upstream.sh --install     # check every Monday at 09:00 (launchd)
+#   ./check-upstream.sh --uninstall   # stop the weekly check
+#
+# Upstream is fetched into refs/upstream/main, so the working tree, branches
+# and FETCH_HEAD are left alone. A notification is sent only when upstream
+# has commits that an earlier check hasn't already reported; the full list
+# goes to ~/.cumora/upstream-check.log every time.
+set -eu
+cd "$(dirname "$0")"
+here=$(pwd)
+repo=$(cd ../.. && pwd)
+
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH
+
+upstream_url=${CUMORA_UPSTREAM_URL:-https://github.com/yetone/cumora}
+branch=${CUMORA_UPSTREAM_BRANCH:-zh-tw}
+label=ai.cumora.upstream-check
+plist="$HOME/Library/LaunchAgents/$label.plist"
+log="$HOME/.cumora/upstream-check.log"
+seen="$HOME/.cumora/upstream-last-notified"
+
+case "${1:-}" in
+  --install)
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.cumora"
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array>
+    <string>$here/check-upstream.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>$here</string>
+  <key>StartCalendarInterval</key><dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key><string>$log</string>
+  <key>StandardErrorPath</key><string>$log</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>HOME</key><string>$HOME</string>
+  </dict>
+</dict></plist>
+PLIST
+    launchctl unload "$plist" 2>/dev/null || true
+    launchctl load "$plist"
+    echo "已設定每週一 09:00 檢查上游更新（Mac 當時在睡眠的話，醒來後補跑）。"
+    echo "日誌：$log"
+    exit 0
+    ;;
+  --uninstall)
+    launchctl unload "$plist" 2>/dev/null || true
+    rm -f "$plist"
+    echo "已取消每週檢查上游更新。"
+    exit 0
+    ;;
+  '') ;;
+  *) echo "用法：./check-upstream.sh [--install | --uninstall]" >&2; exit 64 ;;
+esac
+
+stamp() { date '+%Y-%m-%d %H:%M:%S'; }
+notify() {
+  # Title and body are fixed text plus numbers, so no quoting surprises.
+  osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
+}
+
+git -C "$repo" fetch --quiet "$upstream_url" "+main:refs/upstream/main" \
+  || { echo "$(stamp) 檢查失敗：抓不到 $upstream_url（網路？）" >&2; exit 1; }
+git -C "$repo" rev-parse --verify --quiet "$branch" >/dev/null \
+  || { echo "$(stamp) 檢查失敗：找不到分支 $branch" >&2; exit 1; }
+
+range="$branch..refs/upstream/main"
+count=$(git -C "$repo" rev-list --count --no-merges "$range")
+if [ "$count" -eq 0 ]; then
+  echo "$(stamp) 上游沒有新的 commit（$branch 已是最新）"
+  exit 0
+fi
+
+security=$(git -C "$repo" log --no-merges --format='%s' "$range" | grep -ciE 'security|cve|vuln' || true)
+head_sha=$(git -C "$repo" rev-parse refs/upstream/main)
+
+echo "$(stamp) $branch 落後上游 $count 個 commit（安全相關 $security 個）："
+git -C "$repo" log --no-merges --format='  %h %s' "$range"
+
+if [ "$(cat "$seen" 2>/dev/null || true)" = "$head_sha" ]; then
+  echo "  （上次已通知過同一批，這次不再通知）"
+  exit 0
+fi
+body="$branch 落後 $count 個 commit"
+[ "$security" -gt 0 ] && body="$body，其中 $security 個安全相關"
+notify "Cumora 上游有更新" "$body。詳情：~/.cumora/upstream-check.log"
+mkdir -p "$(dirname "$seen")"
+echo "$head_sha" > "$seen"

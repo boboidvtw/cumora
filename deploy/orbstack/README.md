@@ -128,6 +128,16 @@ git merge FETCH_HEAD        # 在 zh-tw 分支上
 ./up.sh
 ```
 
+每週自動檢查有沒有新的上游 commit：
+
+```bash
+./check-upstream.sh --install     # 每週一 09:00 檢查，有新 commit 就跳 macOS 通知
+./check-upstream.sh               # 立刻檢查一次
+./check-upstream.sh --uninstall   # 取消
+```
+
+它只抓取、不合併：上游放在 `refs/upstream/main`，不動工作目錄和分支。同一批 commit 只通知一次，完整清單記在 `~/.cumora/upstream-check.log`。通知裡「安全相關」的數字是依 commit 訊息的關鍵字（security／CVE／vuln）算的，只是提示，像「未驗證的寄件人不再算成員」這類修正不一定算得到，合併前還是看一下清單。
+
 上游如果新增了介面字串，`src/locales/zh-TW.ts` 還沒翻到的部分會先顯示英文，翻好補上即可。
 
 合併後跑一次掃描，找出沒經過 `t()` 的英文：
