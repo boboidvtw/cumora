@@ -38,6 +38,11 @@ export function AuthScreen() {
   // deployments have no credentials for it — ask the server rather than
   // offering a button that can only 503.
   const [gitlabEnabled, setGitlabEnabled] = useState(false)
+  // The same list gates Google and GitHub once it has arrived: a self-hosted
+  // server often has neither configured. Until then (or if the request
+  // fails) both stay visible, as before.
+  const [providers, setProviders] = useState<string[] | null>(null)
+  const showProvider = (p: 'google' | 'github') => providers === null || providers.includes(p)
   const [err, setErr] = useState<string | null>(null)
   const [picker, setPicker] = useState(false)
 
@@ -47,7 +52,11 @@ export function AuthScreen() {
   useEffect(() => {
     let cancelled = false
     void api.authProviders()
-      .then((r) => { if (!cancelled) setGitlabEnabled(r.providers.includes('gitlab')) })
+      .then((r) => {
+        if (cancelled) return
+        setGitlabEnabled(r.providers.includes('gitlab'))
+        setProviders(r.providers)
+      })
       .catch(() => { /* older server or offline — leave the button hidden */ })
     return () => { cancelled = true }
   }, [])
@@ -217,7 +226,7 @@ export function AuthScreen() {
               {busy === 'apple' ? t('auth.signingIn') : t('auth.continueWithApple')}
             </button>
           )}
-          <button
+          {showProvider('google') && <button
             type="button"
             onClick={() => go('google')}
             disabled={busy !== null}
@@ -225,8 +234,8 @@ export function AuthScreen() {
           >
             <GoogleMark />
             {busy === 'google' ? t('auth.redirecting') : t('auth.continueWithGoogle')}
-          </button>
-          <button
+          </button>}
+          {showProvider('github') && <button
             type="button"
             onClick={() => go('github')}
             disabled={busy !== null}
@@ -234,7 +243,12 @@ export function AuthScreen() {
           >
             <GitHubMark />
             {busy === 'github' ? t('auth.redirecting') : t('auth.continueWithGithub')}
-          </button>
+          </button>}
+          {providers !== null && providers.length === 0 && (
+            <div className="text-[12.5px] leading-[1.6] text-ink-500 text-center px-2">
+              {t('auth.noProviders')}
+            </div>
+          )}
           {gitlabEnabled && (
             <button
               type="button"
@@ -252,9 +266,11 @@ export function AuthScreen() {
             {err}
           </div>
         )}
-        <div className="text-[11px] text-ink-300 text-center font-display italic">
-          {t('auth.providerNote')}
-        </div>
+        {(providers === null || providers.length > 0) && (
+          <div className="text-[11px] text-ink-300 text-center font-display italic">
+            {t('auth.providerNote')}
+          </div>
+        )}
         <ServerSwitch open={picker} onToggle={() => setPicker((v) => !v)} />
       </div>
     </div>

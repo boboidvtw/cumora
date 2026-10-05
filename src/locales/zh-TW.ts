@@ -2098,4 +2098,5 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'whisper.turns': '輪',
   'adminobs.savableOfUsd': ' / 共 {total}',
   'adminobs.savableOfTokens': ' / 共 {total} 輸入',
+  'auth.noProviders': '這台伺服器沒有設定第三方登入。請在執行伺服器的電腦上執行 ./login.sh（deploy/orbstack）登入。',
 } as const
