@@ -2052,6 +2052,7 @@ export const en = {
   'apierr.systemPromptRequired': 'systemPrompt required (at least 10 chars — describe the agent\'s style)',
   'apierr.untilPast': 'until must be in the future',
   'apierr.untilInvalid': 'invalid until timestamp',
+  'apierr.invalidModelId': 'invalid model id',
   'apierr.noEmailAddress': 'no email address available for your account in this workspace',
   'apierr.noReplyRecipients': 'no other recipients to reply to',
   'apierr.emailFieldsRequired': 'to, subject, body required',

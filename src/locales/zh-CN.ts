@@ -2054,6 +2054,7 @@ export const zhCN: Partial<Record<keyof typeof en, string>> = {
   'apierr.systemPromptRequired': '请填写人设（至少 10 个字，描述智能体的风格）',
   'apierr.untilPast': '结束时间必须晚于现在',
   'apierr.untilInvalid': '结束时间格式无效',
+  'apierr.invalidModelId': '模型 ID 无效',
   'apierr.noEmailAddress': '你在这个工作区没有可用的邮箱地址',
   'apierr.noReplyRecipients': '没有其他可回复的收件人',
   'apierr.emailFieldsRequired': '请填写收件人、主题和内容',

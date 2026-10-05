@@ -44,6 +44,7 @@ const EXACT: Record<string, MessageKey> = {
   'systemPrompt required (at least 10 chars — describe the agent\'s style)': 'apierr.systemPromptRequired',
   'until must be in the future': 'apierr.untilPast',
   'invalid until timestamp': 'apierr.untilInvalid',
+  'invalid model id': 'apierr.invalidModelId',
   'no email address available for your account in this workspace': 'apierr.noEmailAddress',
   'no other recipients to reply to': 'apierr.noReplyRecipients',
   'to, subject, body required': 'apierr.emailFieldsRequired',

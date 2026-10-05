@@ -2055,6 +2055,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'apierr.systemPromptRequired': '請填寫人設（至少 10 個字，描述智能體的風格）',
   'apierr.untilPast': '結束時間必須晚於現在',
   'apierr.untilInvalid': '結束時間格式無效',
+  'apierr.invalidModelId': '模型 ID 無效',
   'apierr.noEmailAddress': '你在這個工作區沒有可用的電子郵件地址',
   'apierr.noReplyRecipients': '沒有其他可回覆的收件者',
   'apierr.emailFieldsRequired': '請填寫收件者、主旨和內容',
