@@ -80,7 +80,16 @@ Hermes 執行工具前會送 ACP `session/request_permission`。常駐程式的�
 - `auxiliary.title_generation.enabled: false`：Cumora 有自己的對話名稱，用不到。
 - `approvals.mode: "off"`：審查由容器邊界負責，不必再問一次模型。
 
-這些只寫進**新建**的資料卷。既有智能體要手動加到 `config.yaml`（卷名 `cumora-hermes-<id>`），再重啟常駐程式。
+新建的資料卷會直接寫入這些設定。既有的資料卷會在智能體下次啟動 session 時自動補上：
+
+- **只補缺少的鍵**，手動設過的值（例如把 `approvals.mode` 改回別的）不會被蓋掉，註解也會保留。
+- **每個資料卷只做一次**：完成後在卷裡寫入 `/opt/data/.cumora-config-version`。之後刻意刪掉的鍵不會再被補回來。
+- 補了哪些鍵會記在常駐程式的日誌（`~/.cumora/daemon.log`），搜尋 `hermes-acp-container:` 即可。
+- 不想自動遷移：設 `CUMORA_HERMES_MIGRATE=0`。
+
+注意：舊資料卷如果沒設過 `approvals.mode`，會被補成 `"off"`，也就是不再讓模型審查指令，改由容器邊界負責，和新建的資料卷一致。
+
+之後如果要調整預設值：在 `hermes-acp-container` 把 `config_version` 加一，並把新的鍵加進 `MIGRATE_DEFAULTS`。
 
 ## 已知狀況
 

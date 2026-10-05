@@ -62,11 +62,67 @@ if [ -n "$ipc_dir" ]; then
 fi
 volume="cumora-hermes-$agent_id"
 
+# Bump when the defaults written below change, and add the new keys to
+# MIGRATE_DEFAULTS so volumes created before the change pick them up.
+config_version=1
+
 # First run for this agent: create its volume and write the Hermes config that
 # points at the host's LM Studio. Kept out of the image so the model can be
 # changed without a rebuild, and out of the agent home so the model config is
 # not something the agent itself can rewrite mid-turn.
-if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+if docker volume inspect "$volume" >/dev/null 2>&1; then
+  # Existing volume: fill in defaults added since it was created. Only keys
+  # that are missing are written, so anything set by hand is kept, and a
+  # version marker in the volume makes this run once per volume per version —
+  # a key deleted on purpose afterwards stays deleted. ruamel keeps comments.
+  # Everything goes to stderr (the daemon log); stdout is the JSON-RPC channel.
+  # CUMORA_HERMES_MIGRATE=0 skips it.
+  if [ "${CUMORA_HERMES_MIGRATE:-1}" != "0" ]; then
+    docker run --rm -v "$volume:/opt/data" \
+      -e "CONFIG_VERSION=$config_version" -e "REASONING=$reasoning" -e "VOLUME=$volume" \
+      --entrypoint /opt/hermes/.venv/bin/python "$image" -c '
+import os, sys
+from ruamel.yaml import YAML
+marker, path = "/opt/data/.cumora-config-version", "/opt/data/config.yaml"
+want = int(os.environ["CONFIG_VERSION"])
+try:
+    have = int(open(marker).read().strip() or 0)
+except (FileNotFoundError, ValueError):
+    have = 0
+if have >= want or not os.path.exists(path):
+    sys.exit(0)
+MIGRATE_DEFAULTS = [
+    (("agent", "reasoning_effort"), os.environ["REASONING"]),
+    (("auxiliary", "title_generation", "enabled"), False),
+    (("approvals", "mode"), "off"),
+]
+yaml = YAML()
+yaml.preserve_quotes = True
+with open(path) as f:
+    doc = yaml.load(f) or {}
+added = []
+for keys, value in MIGRATE_DEFAULTS:
+    node = doc
+    for k in keys[:-1]:
+        if not isinstance(node.get(k), dict):
+            node[k] = {}
+        node = node[k]
+    if keys[-1] not in node:
+        node[keys[-1]] = value
+        added.append(".".join(keys) + "=" + repr(value))
+if added:
+    with open(path, "w") as f:
+        yaml.dump(doc, f)
+    os.chown(path, 10000, 10000)
+with open(marker, "w") as f:
+    f.write(str(want) + "\n")
+os.chown(marker, 10000, 10000)
+volume = os.environ["VOLUME"]
+result = "added " + ", ".join(added) if added else "nothing to add"
+print(f"hermes-acp-container: {volume} config v{have} -> v{want}: {result}", file=sys.stderr)
+' >&2 || echo "hermes-acp-container: config migration for $volume failed; starting with the existing config" >&2
+  fi
+else
   docker volume create "$volume" >/dev/null
   printf '%s\n' \
     "# Written by hermes-acp-container. Model runs on the host in LM Studio." \
@@ -85,7 +141,7 @@ if ! docker volume inspect "$volume" >/dev/null 2>&1; then
     "database:" \
     "  journal_mode: wal" \
   | docker run --rm -i -v "$volume:/opt/data" --entrypoint /bin/sh "$image" \
-      -c 'cat > /opt/data/config.yaml && chown 10000:10000 /opt/data/config.yaml' >/dev/null
+      -c "cat > /opt/data/config.yaml && echo $config_version > /opt/data/.cumora-config-version && chown 10000:10000 /opt/data/config.yaml /opt/data/.cumora-config-version" >/dev/null
 fi
 
 exec docker run --rm -i \
