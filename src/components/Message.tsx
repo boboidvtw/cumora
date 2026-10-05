@@ -1,7 +1,7 @@
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import hljs from 'highlight.js/lib/common'
-import Markdown, { type Components } from 'react-markdown'
+import Markdown, { type Components, type Options as MarkdownOptions } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { remarkCumora } from '@/lib/remarkCumora'
@@ -63,7 +63,7 @@ function MentionChip({ id }: { id: string }) {
 
   const isMe = p.id === meId
   const isAgent = p.kind === 'agent'
-  const label = isMe ? 'you' : p.name
+  const label = isMe ? t('common.you') : p.name
 
   const enter = () => {
     if (!ref.current) return
@@ -502,7 +502,10 @@ const cumoraMarkdownComponents = {
 } as Components
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkCumora]
+// singleTilde off: only ~~text~~ strikes through. With it on, a range like
+// "22~31°C ... 23~31°C" in an agent's reply rendered as struck-out text with
+// the tildes gone ("2231°C").
+const REMARK_PLUGINS: NonNullable<MarkdownOptions['remarkPlugins']> = [[remarkGfm, { singleTilde: false }], remarkBreaks, remarkCumora]
 
 /** Renders a message body as Markdown — full CommonMark + GFM via react-markdown,
  *  plus Cumora's own tokens (mentions / artifacts / emoji) — all styled to the

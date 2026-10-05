@@ -360,10 +360,6 @@
     "text": "npx cumora@latest agent computer --restart"
   },
   {
-    "file": "src/desktop/MeView.tsx",
-    "text": "same-origin (Vite proxy)"
-  },
-  {
     "file": "src/desktop/ObservabilityView.tsx",
     "text": "bg-cloud text-ink-700 border-ink-100"
   },

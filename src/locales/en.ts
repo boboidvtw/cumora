@@ -2096,4 +2096,5 @@ export const en = {
   'adminobs.savableOfUsd': ' of {total}',
   'adminobs.savableOfTokens': ' of {total} in',
   'auth.noProviders': 'This server has no third-party sign-in configured. On the machine running it, sign in with ./login.sh (deploy/orbstack).',
+  'me.providerLocal': 'local',
 } as const

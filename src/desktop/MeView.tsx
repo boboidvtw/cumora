@@ -67,7 +67,7 @@ function ProfileTab() {
   const t = useT()
   const authUser = useAuth((s) => s.user)
   const meParticipant = useParticipants((s) => (authUser ? s.byId[authUser.id] : null))
-  const serverOrigin = getServerOrigin() || 'same-origin (Vite proxy)'
+  const serverOrigin = getServerOrigin() || t('auth.sameOrigin')
 
   async function signOut() {
     // Server-side: revoke the session row so the token is dead even if it
@@ -93,7 +93,7 @@ function ProfileTab() {
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               {providers.map((p) => (
                 <span key={p} className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-paper text-ink-700" style={{ border: '1px solid var(--ink-100)' }}>
-                  {p}
+                  {p === 'local' ? t('me.providerLocal') : p}
                 </span>
               ))}
             </div>

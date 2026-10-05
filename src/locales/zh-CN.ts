@@ -2098,4 +2098,5 @@ export const zhCN: Partial<Record<keyof typeof en, string>> = {
   'adminobs.savableOfUsd': ' / 共 {total}',
   'adminobs.savableOfTokens': ' / 共 {total} 输入',
   'auth.noProviders': '这台服务器没有设置第三方登录。请在运行服务器的电脑上执行 ./login.sh（deploy/orbstack）登录。',
+  'me.providerLocal': '本机',
 } as const

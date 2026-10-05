@@ -29,6 +29,15 @@ const statusLabelsKey: Record<string, MessageKey> = {
   resting: 'magents.statusResting',
 }
 
+// The count chips at the top use their own English labels ('available', not
+// 'Available'); map them onto the same status keys.
+const countLabelKey: Record<string, MessageKey> = {
+  working: 'magents.statusWorking',
+  thinking: 'magents.statusThinking',
+  available: 'magents.statusAvail',
+  resting: 'magents.statusResting',
+}
+
 const statusColors: Record<string, string> = {
   avail: 'var(--avail)',
   working: 'var(--working)',
@@ -119,7 +128,7 @@ export function MobileAgents() {
           ].map(([lbl, n]) => (
             <div key={lbl as string} className="py-1 px-2.5 bg-cloud rounded-full text-ink-700 whitespace-nowrap"
               style={{ border: '1px solid var(--ink-100)' }}>
-              <b className="font-semibold text-skype-deep mr-1">{n as number}</b>{lbl as string}
+              <b className="font-semibold text-skype-deep mr-1">{n as number}</b>{tLabel(countLabelKey[lbl as string], lbl as string)}
             </div>
           ))}
         </div>
