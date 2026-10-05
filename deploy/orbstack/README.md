@@ -100,6 +100,14 @@ git merge FETCH_HEAD        # 在 zh-tw 分支上
 
 上游如果新增了介面字串，`src/locales/zh-TW.ts` 還沒翻到的部分會先顯示英文，翻好補上即可。
 
+合併後跑一次掃描，找出沒經過 `t()` 的英文：
+
+```bash
+npm run i18n:scan
+```
+
+它只列出新出現的字串（已審過的誤判記在 `scripts/i18n-scan-allowlist.json`），有新項目時結束碼為 1。真正的漏網字串改完後，剩下的誤判用 `node scripts/scan-i18n-leftovers.mjs --update` 記錄為已審過。上游新增的伺服器錯誤訊息（`HttpError`）不在掃描範圍內，要另外補進 `src/lib/localize-api-error.ts`。
+
 ## 注意事項
 
 - **不要改 `.env` 裡自動產生的兩個密鑰。** `POSTGRES_PASSWORD` 已經寫進資料庫，改了會連不上；`AGENT_RUNTIME_SECRET` 一改，所有已配對的電腦都要重新配對。

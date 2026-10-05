@@ -35,6 +35,7 @@
     "guard:llm-tracked": "node scripts/guard-llm-tracked.mjs",
     "guard:engine-registry": "node scripts/guard-engine-registry.mjs",
     "guard:migration-locks": "node scripts/guard-migration-locks.mjs",
+    "i18n:scan": "node scripts/scan-i18n-leftovers.mjs",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "test": "node --import tsx --test \"server/src/__tests__/**/*.test.ts\" \"tests/**/*.test.ts\" \"workers/**/*.test.ts\"",

@@ -1,0 +1,518 @@
+[
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "\"Did the convene reach a decision?\" closer."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Agenda check"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Agent image tool"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Agent turn"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Agent-invoked 5-color palette generator."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "All"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Auto-refresh: Off"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Avatar image"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Avatar-pipeline gender pick."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Cloud"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Cloud gate that decides whether a human message wakes the brain."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Completion verify"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Convene decision"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Convene speech"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Digests mid-turn messages so the agent can react without history blow-up."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Gate for idle / background-scan / poll-update wakes."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Gender inference"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Heartbeat classifier on cards / events / stalls."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Image gen at agent creation / regeneration."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Image gen invoked by an agent mid-turn."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Inbox triage"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Main reasoning hop per turn — the agent's actual reply work."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "One agent speaking inside a live convene session."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Palette tool"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Re-checks an agent’s terminal status against side effects."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Steer summary"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Summarizes earlier tool work when history nears the context cap."
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Synthetic-wake gate"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "Tokens"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "·est"
+  },
+  {
+    "file": "src/admin/ObservabilityPage.tsx",
+    "text": "·meter"
+  },
+  {
+    "file": "src/admin/UsersPage.tsx",
+    "text": "&nbsp;"
+  },
+  {
+    "file": "src/components/AgentEditor.tsx",
+    "text": "`npx cumora@latest agent computer --pair ${repairCode}${origin ? ` --server ${origin}` : ''}`"
+  },
+  {
+    "file": "src/components/AuthScreen.tsx",
+    "text": "Local Dev"
+  },
+  {
+    "file": "src/components/AuthScreen.tsx",
+    "text": "Production"
+  },
+  {
+    "file": "src/components/AuthScreen.tsx",
+    "text": "cumora:oauth-token"
+  },
+  {
+    "file": "src/components/AuthScreen.tsx",
+    "text": "https://your-server"
+  },
+  {
+    "file": "src/components/EmailComposer.tsx",
+    "text": "Re:"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Fri"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Mon"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Sat"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Sun"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Thu"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Tue"
+  },
+  {
+    "file": "src/components/EventEditor.tsx",
+    "text": "Wed"
+  },
+  {
+    "file": "src/components/GetDesktopAppLink.tsx",
+    "text": "0 6px 16px -4px rgba(0, 168, 240, 0.5)"
+  },
+  {
+    "file": "src/components/GetDesktopAppLink.tsx",
+    "text": "1px solid var(--ink-100)"
+  },
+  {
+    "file": "src/components/GetDesktopAppLink.tsx",
+    "text": "text-[12px] text-ink-400 hover:text-ink-700 transition font-display italic underline-offset-2 hover:underline"
+  },
+  {
+    "file": "src/components/GetDesktopAppLink.tsx",
+    "text": "w-full py-3 rounded-[12px] text-[14px] font-semibold text-ink-700 transition text-center"
+  },
+  {
+    "file": "src/components/GetDesktopAppLink.tsx",
+    "text": "w-full py-3 rounded-[12px] text-[14px] font-semibold text-white transition text-center"
+  },
+  {
+    "file": "src/components/HiveAvatar.tsx",
+    "text": "absolute inset-0 w-full h-full object-cover rounded-full"
+  },
+  {
+    "file": "src/components/HiveAvatar.tsx",
+    "text": "w-full h-full object-cover"
+  },
+  {
+    "file": "src/components/ImageViewer.tsx",
+    "text": "noopener,noreferrer"
+  },
+  {
+    "file": "src/components/InvitePeopleModal.tsx",
+    "text": "teammate@example.com"
+  },
+  {
+    "file": "src/components/MembersPopover.tsx",
+    "text": "Available"
+  },
+  {
+    "file": "src/components/MembersPopover.tsx",
+    "text": "Resting"
+  },
+  {
+    "file": "src/components/MembersPopover.tsx",
+    "text": "Thinking"
+  },
+  {
+    "file": "src/components/MembersPopover.tsx",
+    "text": "Waiting on you"
+  },
+  {
+    "file": "src/components/MembersPopover.tsx",
+    "text": "Working"
+  },
+  {
+    "file": "src/components/Message.tsx",
+    "text": "1px solid rgba(15, 30, 50, 0.1)"
+  },
+  {
+    "file": "src/components/Message.tsx",
+    "text": "allow-popups allow-popups-to-escape-sandbox"
+  },
+  {
+    "file": "src/components/Message.tsx",
+    "text": "messages"
+  },
+  {
+    "file": "src/components/RichInput.tsx",
+    "text": "/everyone.png"
+  },
+  {
+    "file": "src/components/ShippingWorkspace.tsx",
+    "text": "Previously verified behavior remains true"
+  },
+  {
+    "file": "src/components/ShippingWorkspace.tsx",
+    "text": "border-coral/30 bg-coral-soft/30 text-coral-deep hover:bg-coral-soft/60"
+  },
+  {
+    "file": "src/components/ShippingWorkspace.tsx",
+    "text": "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+  },
+  {
+    "file": "src/components/ShippingWorkspace.tsx",
+    "text": "border-ink-100 bg-cloud text-ink-700 hover:bg-sky2-50"
+  },
+  {
+    "file": "src/components/ShippingWorkspace.tsx",
+    "text": "border-skype bg-skype text-white hover:bg-skype-deep"
+  },
+  {
+    "file": "src/components/ShippingWorkspace.tsx",
+    "text": "w-full rounded-xl border border-ink-100 bg-cloud px-3 py-2.5 text-[13px] text-ink-900 outline-none transition focus:bord"
+  },
+  {
+    "file": "src/components/UpdaterDialog.tsx",
+    "text": "browser mode"
+  },
+  {
+    "file": "src/desktop/BoardsView.tsx",
+    "text": "sidebar:boards"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "Agents"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "All"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "Groups"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "Humans"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "Unread"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "Whispers"
+  },
+  {
+    "file": "src/desktop/ConversationsPane.tsx",
+    "text": "label:pinned"
+  },
+  {
+    "file": "src/desktop/DesktopApp.tsx",
+    "text": "0 50px 100px -20px rgba(10, 30, 60, 0.25), 0 30px 60px -30px rgba(10, 30, 60, 0.3), 0 0 0 1px rgba(0, 80, 140, 0.06)"
+  },
+  {
+    "file": "src/desktop/DesktopApp.tsx",
+    "text": "min(1480px, calc(100vw - 48px))"
+  },
+  {
+    "file": "src/desktop/DesktopApp.tsx",
+    "text": "sidebar:conversations"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "`npx cumora@latest agent computer --pair ${code}${serverFlag}${engineFlag}${asService ? ' --install-service' : ''}`"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "`npx cumora@latest agent computer --pair ${repairCode}${serverFlag}`"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "cumora:open-updater"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "fast:"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "me.statLed"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "me.statNoise"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "me.statPulled"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "npx cumora@latest agent computer"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "npx cumora@latest agent computer --restart"
+  },
+  {
+    "file": "src/desktop/MeView.tsx",
+    "text": "same-origin (Vite proxy)"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "bg-cloud text-ink-700 border-ink-100"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "bg-coral-soft text-coral-deep border-coral-soft"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "bg-sky2-50 text-skype-deep border-sky2-100"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "border-coral-soft bg-coral-soft text-coral-deep"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "border-gold bg-cloud text-gold-deep"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "border-ink-100 bg-paper text-ink-500"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "call="
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "role="
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "sidebar:observability"
+  },
+  {
+    "file": "src/desktop/ObservabilityView.tsx",
+    "text": "type="
+  },
+  {
+    "file": "src/desktop/Onboarding.tsx",
+    "text": "`npx cumora@latest agent computer --pair ${code}${origin ? ` --server ${origin}` : ''}${engineFlag}${serviceFlag}`"
+  },
+  {
+    "file": "src/desktop/WhispersView.tsx",
+    "text": "sidebar:whispers"
+  },
+  {
+    "file": "src/mobile/MobileAgents.tsx",
+    "text": "Available"
+  },
+  {
+    "file": "src/mobile/MobileAgents.tsx",
+    "text": "Resting"
+  },
+  {
+    "file": "src/mobile/MobileAgents.tsx",
+    "text": "Thinking"
+  },
+  {
+    "file": "src/mobile/MobileAgents.tsx",
+    "text": "Waiting on you"
+  },
+  {
+    "file": "src/mobile/MobileAgents.tsx",
+    "text": "Working"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Fri"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Mon"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Sat"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Sun"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Thu"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Tue"
+  },
+  {
+    "file": "src/mobile/MobileCalendar.tsx",
+    "text": "Wed"
+  },
+  {
+    "file": "src/mobile/MobileChatList.tsx",
+    "text": "Agents"
+  },
+  {
+    "file": "src/mobile/MobileChatList.tsx",
+    "text": "All"
+  },
+  {
+    "file": "src/mobile/MobileChatList.tsx",
+    "text": "Humans"
+  },
+  {
+    "file": "src/mobile/MobileChatList.tsx",
+    "text": "Whispers"
+  },
+  {
+    "file": "src/mobile/MobileLibrary.tsx",
+    "text": "Boards"
+  },
+  {
+    "file": "src/mobile/MobileLibrary.tsx",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/mobile/MobileLibrary.tsx",
+    "text": "Documents"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "Available"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "Resting"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "Thinking"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "Waiting on you"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "Working"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "radial-gradient(circle at 50% 0%, var(--coral-soft), transparent 70%)"
+  },
+  {
+    "file": "src/mobile/MobileParticipantInfo.tsx",
+    "text": "radial-gradient(circle at 50% 0%, var(--sky-100), transparent 70%)"
+  }
+]
