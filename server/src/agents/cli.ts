@@ -4670,7 +4670,7 @@ async function cmdCalendar(parsed: ParsedArgs): Promise<CliResult> {
     //                                  [--in <convo_id>] [--every daily|weekly|monthly|yearly]
     //                                  [--interval N] [--byweekday 0,1,2] [--until <iso>] [--count N]
     //                                  [--kind personal|agent_task]
-    const title = parsed.positional.slice(1).join(' ').trim()
+    const title = pinAgentOutputScript(parsed.positional.slice(1).join(' ').trim())
     if (!title) return err('usage: calendar create "<title>" --at <iso> [flags]')
     const startStr = parsed.flags.at ? String(parsed.flags.at) : ''
     if (!startStr) return err('--at <iso-timestamp> is required')
@@ -4816,12 +4816,12 @@ async function cmdCalendar(parsed: ParsedArgs): Promise<CliResult> {
       sets.push(`${column} = $${params.length}`)
     }
     if (parsed.flags.title !== undefined) {
-      const title = String(parsed.flags.title).trim().slice(0, 200)
+      const title = pinAgentOutputScript(String(parsed.flags.title).trim()).slice(0, 200)
       if (!title) return err('--title cannot be empty')
       push('title', title)
     }
     if (parsed.flags.description !== undefined) {
-      push('description', String(parsed.flags.description).slice(0, 4000) || null)
+      push('description', pinAgentOutputScript(String(parsed.flags.description)).slice(0, 4000) || null)
     }
     if (parsed.flags.kind !== undefined) {
       const kind = String(parsed.flags.kind)
@@ -5197,11 +5197,11 @@ async function cmdBoard(parsed: ParsedArgs): Promise<CliResult> {
   }
 
   if (op === 'create' || op === 'new') {
-    const title = parsed.positional.slice(1).join(' ').trim()
-      || (typeof parsed.flags.title === 'string' ? parsed.flags.title : '')
+    const title = pinAgentOutputScript(parsed.positional.slice(1).join(' ').trim()
+      || (typeof parsed.flags.title === 'string' ? parsed.flags.title : ''))
     if (!title) return err('usage: kanban create "<title>" [--description "..."]')
     const description = typeof parsed.flags.description === 'string'
-      ? unescapeChat(parsed.flags.description).slice(0, 4000) : null
+      ? pinAgentOutputScript(unescapeChat(parsed.flags.description)).slice(0, 4000) : null
     const id = `board-${randomUUID().slice(0, 12)}`
     await withOutboxTransaction(async (client) => {
       await client.query(
@@ -5242,15 +5242,15 @@ async function cmdBoard(parsed: ParsedArgs): Promise<CliResult> {
     const params: unknown[] = []
     let nextTitle: string | undefined
     if (typeof parsed.flags.title === 'string' || parsed.positional.length > 2) {
-      nextTitle = (typeof parsed.flags.title === 'string'
+      nextTitle = pinAgentOutputScript((typeof parsed.flags.title === 'string'
         ? unescapeChat(parsed.flags.title)
-        : parsed.positional.slice(2).join(' ')).trim().slice(0, 200)
+        : parsed.positional.slice(2).join(' ')).trim()).slice(0, 200)
       if (!nextTitle) return err('--title cannot be empty')
       params.push(nextTitle); sets.push(`title = $${params.length}`)
     }
     let nextDescription: string | null | undefined
     if (typeof parsed.flags.description === 'string') {
-      nextDescription = unescapeChat(parsed.flags.description).trim().slice(0, 4000) || null
+      nextDescription = pinAgentOutputScript(unescapeChat(parsed.flags.description).trim()).slice(0, 4000) || null
       params.push(nextDescription); sets.push(`description = $${params.length}`)
     }
     if (sets.length === 0) return err('nothing to update — pass --title or --description')
@@ -5297,7 +5297,7 @@ async function cmdBoard(parsed: ParsedArgs): Promise<CliResult> {
 
   if (op === 'add-column' || op === 'add-col') {
     const boardId = parsed.positional[1]
-    const title = parsed.positional.slice(2).join(' ').trim()
+    const title = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim())
     if (!boardId || !title) return err('usage: kanban add-column <board_id> "<title>"')
     const kind = parsed.flags.kind === undefined ? null : parsed.flags.kind
     if (kind !== null && !['todo', 'doing', 'done'].includes(kind as string)) return err('--kind must be todo, doing, or done')
@@ -5343,9 +5343,9 @@ async function cmdBoard(parsed: ParsedArgs): Promise<CliResult> {
     const sets: string[] = []
     const params: unknown[] = []
     if (typeof parsed.flags.title === 'string' || parsed.positional.length > 3) {
-      const title = (typeof parsed.flags.title === 'string'
+      const title = pinAgentOutputScript((typeof parsed.flags.title === 'string'
         ? unescapeChat(parsed.flags.title)
-        : parsed.positional.slice(3).join(' ')).trim().slice(0, 100)
+        : parsed.positional.slice(3).join(' ')).trim()).slice(0, 100)
       if (!title) return err('--title cannot be empty')
       params.push(title); sets.push(`title = $${params.length}`)
     }
@@ -5670,8 +5670,8 @@ async function cmdCard(parsed: ParsedArgs): Promise<CliResult> {
 
   if (op === 'add' || op === 'create') {
     const boardId = parsed.positional[1]
-    const title = parsed.positional.slice(2).join(' ').trim()
-      || (typeof parsed.flags.title === 'string' ? parsed.flags.title : '')
+    const title = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim()
+      || (typeof parsed.flags.title === 'string' ? parsed.flags.title : ''))
     if (!boardId || !title) {
       return err('usage: card add <board_id> "<title>" --column <col_id> [--description "..."] [--assign <id>] [--due YYYY-MM-DD]')
     }
@@ -5687,7 +5687,7 @@ async function cmdCard(parsed: ParsedArgs): Promise<CliResult> {
     )
     if (colCheck.rows.length === 0) return err(`column ${columnId} not in board ${boardId}`)
     const description = typeof parsed.flags.description === 'string'
-      ? unescapeChat(parsed.flags.description).slice(0, 8000) : null
+      ? pinAgentOutputScript(unescapeChat(parsed.flags.description)).slice(0, 8000) : null
     const assignee = typeof parsed.flags.assign === 'string'
       ? String(parsed.flags.assign).trim() : null
     const dueOn = parsed.flags.due === undefined ? null : parsed.flags.due
@@ -5924,11 +5924,11 @@ async function cmdCard(parsed: ParsedArgs): Promise<CliResult> {
     const sets: string[] = []
     const params: unknown[] = []
     if (typeof parsed.flags.title === 'string') {
-      nextTitle = unescapeChat(parsed.flags.title).slice(0, 200)
+      nextTitle = pinAgentOutputScript(unescapeChat(parsed.flags.title)).slice(0, 200)
       params.push(nextTitle); sets.push(`title = $${params.length}`)
     }
     if (typeof parsed.flags.description === 'string') {
-      nextDesc = unescapeChat(parsed.flags.description).slice(0, 8000) || null
+      nextDesc = pinAgentOutputScript(unescapeChat(parsed.flags.description)).slice(0, 8000) || null
       params.push(nextDesc); sets.push(`description = $${params.length}`)
     }
     if (sets.length === 0) return err('nothing to update — pass --title or --description')
@@ -6193,9 +6193,9 @@ async function cmdDocAsActiveAgent(
   }
 
   if (op === 'create' || op === 'new') {
-    const title = parsed.positional.slice(1).join(' ').trim()
+    const title = pinAgentOutputScript(parsed.positional.slice(1).join(' ').trim()
       || (typeof parsed.flags.title === 'string' ? parsed.flags.title : '')
-      || 'Untitled'
+      || 'Untitled')
 
     // Tenant-scoped claim by title so two agents don't independently
     // create overlapping docs ("Q3 plan v1", "Q3 plan v2", "Q3 plan
@@ -6251,7 +6251,7 @@ async function cmdDocAsActiveAgent(
       // If --body was supplied, seed the doc as one or more paragraphs.
       // Newlines split, so a multi-line body lands as proper block
       // structure (not a single 1500-char paragraph) in the rich editor.
-      const body = typeof parsed.flags.body === 'string' ? unescapeChat(parsed.flags.body) : ''
+      const body = typeof parsed.flags.body === 'string' ? pinAgentOutputScript(unescapeChat(parsed.flags.body)) : ''
       if (body) {
         const { applyAgentEdit } = await import('../documents/rooms.js')
         await applyAgentEdit(id, companyId, me, [{ kind: 'append', text: body }], dbClient)
@@ -6289,8 +6289,8 @@ async function cmdDocAsActiveAgent(
 
   if (op === 'append') {
     const docId = parsed.positional[1]
-    const text = parsed.positional.slice(2).join(' ').trim()
-      || (typeof parsed.flags.text === 'string' ? unescapeChat(parsed.flags.text) : '')
+    const text = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim()
+      || (typeof parsed.flags.text === 'string' ? unescapeChat(parsed.flags.text) : ''))
     if (!docId || !text) return err('usage: doc append <document_id> "<text>"')
     const { rows } = await dbClient.query<{ company_id: string }>(
       `SELECT company_id FROM documents WHERE id = $1 LIMIT 1`, [docId],
@@ -6313,8 +6313,8 @@ async function cmdDocAsActiveAgent(
 
   if (op === 'prepend') {
     const docId = parsed.positional[1]
-    const text = parsed.positional.slice(2).join(' ').trim()
-      || (typeof parsed.flags.text === 'string' ? unescapeChat(parsed.flags.text) : '')
+    const text = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim()
+      || (typeof parsed.flags.text === 'string' ? unescapeChat(parsed.flags.text) : ''))
     if (!docId || !text) return err('usage: doc prepend <document_id> "<text>"')
     const { rows } = await dbClient.query<{ company_id: string }>(
       `SELECT company_id FROM documents WHERE id = $1 LIMIT 1`, [docId],
@@ -6353,7 +6353,7 @@ async function cmdDocAsActiveAgent(
     const docId = parsed.positional[1]
     const src = parsed.positional[2]
       || (typeof parsed.flags.src === 'string' ? unescapeChat(parsed.flags.src) : '')
-    const alt = typeof parsed.flags.alt === 'string' ? unescapeChat(parsed.flags.alt).trim() : ''
+    const alt = typeof parsed.flags.alt === 'string' ? pinAgentOutputScript(unescapeChat(parsed.flags.alt).trim()) : ''
     const replaceAnchor = typeof parsed.flags.replace === 'string' ? unescapeChat(parsed.flags.replace) : ''
     const afterAnchor = typeof parsed.flags.after === 'string' ? unescapeChat(parsed.flags.after) : ''
     const beforeAnchor = typeof parsed.flags.before === 'string' ? unescapeChat(parsed.flags.before) : ''
@@ -6467,14 +6467,21 @@ async function cmdDocAsActiveAgent(
   if (op === 'replace') {
     const docId = parsed.positional[1]
     const find = typeof parsed.flags.find === 'string' ? unescapeChat(parsed.flags.find) : ''
-    const replace = typeof parsed.flags.replace === 'string' ? unescapeChat(parsed.flags.replace) : ''
+    const replace = typeof parsed.flags.replace === 'string' ? pinAgentOutputScript(unescapeChat(parsed.flags.replace)) : ''
     if (!docId || !find) return err('usage: doc replace <document_id> --find "..." --replace "..."')
     const { rows } = await dbClient.query<{ company_id: string }>(
       `SELECT company_id FROM documents WHERE id = $1 LIMIT 1`, [docId],
     )
     if (rows.length === 0 || rows[0].company_id !== companyId) return err(`document ${docId} not found`)
     const { applyAgentEdit } = await import('../documents/rooms.js')
-    const r = await applyAgentEdit(docId, companyId, me, [{ kind: 'replace', find, replace }], dbClient)
+    let r = await applyAgentEdit(docId, companyId, me, [{ kind: 'replace', find, replace }], dbClient)
+    // Text the agent wrote earlier was stored after the output-script pin, so
+    // a --find quoted from the agent's own draft can still be in Simplified.
+    // Only on a miss, so a document that really holds Simplified still matches as typed.
+    const pinnedFind = pinAgentOutputScript(find)
+    if (r.replaced === 0 && pinnedFind !== find) {
+      r = await applyAgentEdit(docId, companyId, me, [{ kind: 'replace', find: pinnedFind, replace }], dbClient)
+    }
     if (r.replaced === 0) return err(`text not found in ${docId}: ${JSON.stringify(find).slice(0, 80)}`)
     await onChanged('document.updated', docId)
     return ok(`replaced ${r.replaced} occurrence in ${docId}`, [{
@@ -6492,15 +6499,20 @@ async function cmdDocAsActiveAgent(
   if (op === 'replace-block') {
     const docId = parsed.positional[1]
     const anchor = typeof parsed.flags.anchor === 'string' ? unescapeChat(parsed.flags.anchor) : ''
-    const text = parsed.positional.slice(2).join(' ').trim()
-      || (typeof parsed.flags.text === 'string' ? unescapeChat(parsed.flags.text) : '')
+    const text = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim()
+      || (typeof parsed.flags.text === 'string' ? unescapeChat(parsed.flags.text) : ''))
     if (!docId || !anchor || !text) return err('usage: doc replace-block <document_id> --anchor "<snippet in the block>" "<replacement markdown>"')
     const { rows } = await dbClient.query<{ company_id: string }>(
       `SELECT company_id FROM documents WHERE id = $1 LIMIT 1`, [docId],
     )
     if (rows.length === 0 || rows[0].company_id !== companyId) return err(`document ${docId} not found`)
     const { applyAgentEdit } = await import('../documents/rooms.js')
-    const r = await applyAgentEdit(docId, companyId, me, [{ kind: 'replaceBlock', anchorText: anchor, text }], dbClient)
+    let r = await applyAgentEdit(docId, companyId, me, [{ kind: 'replaceBlock', anchorText: anchor, text }], dbClient)
+    // Same retry as `doc replace`: the anchor may quote pre-pin Simplified text.
+    const pinnedAnchor = pinAgentOutputScript(anchor)
+    if (r.blocksReplaced === 0 && pinnedAnchor !== anchor) {
+      r = await applyAgentEdit(docId, companyId, me, [{ kind: 'replaceBlock', anchorText: pinnedAnchor, text }], dbClient)
+    }
     if (r.blocksReplaced === 0) return err(`no block containing ${JSON.stringify(anchor).slice(0, 80)} in ${docId}`)
     await onChanged('document.updated', docId)
     return ok(`replaced 1 block in ${docId}`, [{
@@ -6516,8 +6528,8 @@ async function cmdDocAsActiveAgent(
 
   if (op === 'rename') {
     const docId = parsed.positional[1]
-    const title = parsed.positional.slice(2).join(' ').trim()
-      || (typeof parsed.flags.title === 'string' ? parsed.flags.title : '')
+    const title = pinAgentOutputScript(parsed.positional.slice(2).join(' ').trim()
+      || (typeof parsed.flags.title === 'string' ? parsed.flags.title : ''))
     if (!docId || !title) return err('usage: doc rename <document_id> "<title>"')
     const r = await dbClient.query(
       `UPDATE documents SET title = $1, updated_at = NOW()
