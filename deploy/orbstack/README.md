@@ -94,10 +94,28 @@ docker compose start              # 再啟動
 
 整合測試裡的 `ws-doc-authorization` 每次通過都要等大約一分鐘才結束，這是上游測試本身的行為（房間的重連寬限計時器），不是卡住。
 
-### 備份資料庫
+### 備份
 
 ```bash
-docker compose exec -T postgres pg_dump -U cumora cumora | gzip > cumora-$(date +%F).sql.gz
+./backup.sh --install      # 每天 03:30 自動備份（Mac 在睡眠的話，醒來後補跑）
+./backup.sh                # 立刻備份一次
+./backup.sh --uninstall    # 取消自動備份（已做好的備份會留著）
+```
+
+每份備份是 `~/.cumora/backups/cumora-<日期時間>/` 底下的兩個檔案：資料庫 `db.sql.gz` 和上傳檔案 `uploads.tar.gz`。預設保留最近 14 份，日誌在 `~/.cumora/backup.log`。Redis 不備份，裡面只有佇列和暫存狀態，伺服器會自己重建。
+
+- 換位置：`CUMORA_BACKUP_DIR=/Volumes/外接碟/cumora ./backup.sh --install`。預設位置和資料在同一顆硬碟上，防得了誤刪、防不了硬碟壞掉；放到外接碟或雲端同步資料夾比較保險。
+- 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。
+
+**還原**（會覆蓋目前的資料，先停伺服器）：
+
+```bash
+docker compose stop server
+gunzip -c ~/.cumora/backups/cumora-<日期時間>/db.sql.gz \
+  | docker compose exec -T postgres psql -U cumora -d cumora -v ON_ERROR_STOP=1
+docker run --rm -i -v cumora_uploads:/data --entrypoint tar pgvector/pgvector:pg16 \
+  -C /data -xzf - < ~/.cumora/backups/cumora-<日期時間>/uploads.tar.gz
+docker compose start server
 ```
 
 資料存在 `cumora_pgdata`、`cumora_redisdata` 和 `cumora_uploads` 三個 Docker volume。`docker compose down` 不會刪資料；**`docker compose down -v` 會全部刪掉**。
