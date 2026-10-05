@@ -82,6 +82,18 @@ docker compose start              # 再啟動
 ./up.sh                           # 改了程式碼或 .env 之後重建並重啟
 ```
 
+### 跑測試
+
+```bash
+./test.sh                  # 單元測試
+./test.sh --integration    # 單元測試＋整合測試
+./test.sh --down           # 關掉測試用的資料庫
+```
+
+測試會另外啟動一組拋棄式的 Postgres 和 Redis（`test-services.yml`，port 55432／56379，資料只放在記憶體），**不會碰到正式的 Cumora 資料**。不要直接跑 `npm test`：沒設 `DATABASE_URL`／`REDIS_URL` 時會連到這台 Mac 預設的 5432／6379，那是別的容器。
+
+整合測試裡的 `ws-doc-authorization` 每次通過都要等大約一分鐘才結束，這是上游測試本身的行為（房間的重連寬限計時器），不是卡住。
+
 ### 備份資料庫
 
 ```bash
