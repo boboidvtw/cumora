@@ -15,10 +15,12 @@
  *     runtime/jwt.ts — the same token a pod gets)
  */
 import { type ProviderProfileMetadata, isProviderProfileId, sanitizeProviderProfiles } from './provider-profiles.js'
+import { InvalidModelIdError, parseModelId } from './model-id.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { pool } from '../../db/pool.js'
 import { audit } from '../../auth.js'
-import { CH_STATUS, publish } from '../../redis.js'
+import { CH_STATUS } from '../../redis.js'
+import { enqueueBroadcast, nudgeRealtimeOutbox } from '../../realtime-outbox.js'
 import { normalizeTier, type Tier } from '../../tier.js'
 import { signAgentToken } from '../runtime/jwt.js'
 import type { EngineModelCatalog, EngineModelOption, FastModelScope, ModelCatalogSource } from './model-catalog.js'
@@ -37,12 +39,15 @@ export const COMPUTER_STALE_MS = 90_000
 async function broadcastComputerStatus(
   computerId: string, companyId: string, status: ComputerStatus,
 ): Promise<void> {
-  await publish(CH_STATUS, { type: 'computers.status', computerId, status, companyId }).catch((error) => {
+  try {
+    await enqueueBroadcast(pool, CH_STATUS, { type: 'computers.status', computerId, status, companyId })
+    nudgeRealtimeOutbox()
+  } catch (error) {
     console.warn(
-      `[computer] durable ${computerId}=${status} update committed but publish failed`,
+      `[computer] durable ${computerId}=${status} update committed but outbox insert failed`,
       error,
     )
-  })
+  }
 }
 
 /** Announce a just-paired computer as online. Split out from {@link pairComputer}
@@ -1206,8 +1211,10 @@ export async function reportDetectedEngines(args: {
 }
 
 /** Sanitize and validate engine defaults before storage. Only accepts known
- *  engine ids and string model names within length limits. */
-function sanitizeEngineDefaults(raw: unknown): EngineDefaultsMap {
+ *  engine ids and model ids. `strict` throws on a bad id so a write is
+ *  rejected; a read drops the bad id instead, so one stored value cannot
+ *  make the computer's defaults unreadable. */
+function sanitizeEngineDefaults(raw: unknown, strict = false): EngineDefaultsMap {
   if (!raw || typeof raw !== 'object') return {}
   const result: EngineDefaultsMap = {}
   for (const [engineId, defaults] of Object.entries(raw as Record<string, unknown>)) {
@@ -1216,11 +1223,15 @@ function sanitizeEngineDefaults(raw: unknown): EngineDefaultsMap {
     const rec = defaults as Record<string, unknown>
     // Empty/whitespace-only strings mean "clear" — same as an explicit null.
     const cleanModel = (value: unknown): string | null | undefined => {
-      if (typeof value === 'string') {
-        const trimmed = value.trim()
-        return trimmed ? trimmed.slice(0, 160) : null
+      try {
+        return parseModelId(value)
+      } catch (error) {
+        if (error instanceof InvalidModelIdError) {
+          if (strict) throw error
+          return undefined
+        }
+        throw error
       }
-      return value === null ? null : undefined
     }
     const model = cleanModel(rec.model)
     const fastModel = cleanModel(rec.fastModel)
@@ -1255,7 +1266,7 @@ export async function updateEngineDefaults(args: {
       return null
     }
     const existing = sanitizeEngineDefaults(rows[0].engine_defaults)
-    const merged = sanitizeEngineDefaults(args.defaults)
+    const merged = sanitizeEngineDefaults(args.defaults, true)
     // Deep merge: for each engine, merge model and fastModel
     for (const [engineId, defaults] of Object.entries(merged)) {
       if (defaults.model === null && defaults.fastModel === null) {

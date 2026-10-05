@@ -80,10 +80,11 @@ export async function withRuntimeAgentRunAuthorization<T>(args: {
   }
 }
 
-/** Hold the current agent and every requested conversation membership stable
- * while an ephemeral Redis/pubsub side effect runs. Membership mutation uses
- * the same participant -> conversation lock order, so a revoke is linearized
- * either wholly before or wholly after the side effect. */
+/** Check the current agent and every requested conversation membership, then
+ * release the connection before the Redis side effect. Holding `FOR SHARE`
+ * across that publish pinned a pool slot and the membership rows for the
+ * whole round trip. A revoke that commits in the gap after this check can
+ * still observe one in-flight publish. */
 export async function withRuntimeConversationAuthorization<T>(args: {
   agentId: string
   companyId: string
@@ -92,6 +93,7 @@ export async function withRuntimeConversationAuthorization<T>(args: {
 }): Promise<{ authorized: boolean; result?: T }> {
   const conversationIds = [...new Set(args.conversationIds)].sort()
   const client = await pool.connect()
+  let authorized = false
   try {
     await client.query('BEGIN')
     const participant = await client.query(
@@ -123,15 +125,17 @@ export async function withRuntimeConversationAuthorization<T>(args: {
         return { authorized: false }
       }
     }
-    const result = await args.task()
     await client.query('COMMIT')
-    return { authorized: true, result }
+    authorized = true
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})
     throw error
   } finally {
     client.release()
   }
+  if (!authorized) return { authorized: false }
+  const result = await args.task()
+  return { authorized: true, result }
 }
 
 /** Authorize a read-cursor advance against the exact persisted message. The

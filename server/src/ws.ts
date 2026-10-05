@@ -7,10 +7,8 @@ import {
   CH_GROUP_PULLED, CH_CONVO_UPDATED, CH_CONVENE,
   CH_BOARDS, CH_DOCS, CH_CALENDAR_REMINDER, CH_CALENDAR_EVENTS, CH_DOC_MENTION,
   CH_WORKSPACES,
-  publish,
   type DocMentionEvent,
 } from './redis.js'
-import type { MessageNewEvent } from './redis.js'
 import { env } from './env.js'
 import { consumeWsTicket } from './auth.js'
 import { pool } from './db/pool.js'
@@ -124,34 +122,19 @@ export async function resetHumanPresenceOnBoot(): Promise<void> {
     if (rows.length > 0) {
       console.log(`[ws] demoted ${rows.length} stale 'avail' human(s) to 'resting' on boot`)
     }
-    // Broadcast each transition so any already-connected clients in a
-    // multi-instance setup see the reset. We fire publishes in
-    // parallel and bound the whole batch with a hard timeout: the
-    // old code was a sequential `for await publish` that hung
-    // server.listen() at first deploy when the table was full of
-    // pre-feature stale rows. Failures are swallowed (Promise.race
-    // against a timeout) — at boot there are typically zero connected
-    // clients anyway, so the publish is best-effort.
-    if (rows.length === 0) return
-    const PUBLISH_BATCH_TIMEOUT_MS = 10_000
-    const broadcastAll = Promise.allSettled(rows.map((r) =>
-      publish(CH_STATUS, {
+    // The status rows are already committed by the statement above. Record
+    // the broadcasts in the outbox so a Redis blip retries them, and do not
+    // wait for Redis here: this function runs before listen().
+    for (const r of rows) {
+      await enqueueBroadcast(pool, CH_STATUS, {
         type: 'participants.status',
         participantId: r.id,
         status: 'resting',
         statusUpdatedAt: r.status_updated_at.toISOString(),
         companyId: r.company_id,
-      }),
-    ))
-    await Promise.race([
-      broadcastAll,
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          console.warn(`[ws] resetHumanPresenceOnBoot publishes still pending after ${PUBLISH_BATCH_TIMEOUT_MS}ms — continuing without them`)
-          resolve()
-        }, PUBLISH_BATCH_TIMEOUT_MS),
-      ),
-    ])
+      })
+    }
+    if (rows.length > 0) nudgeRealtimeOutbox()
   } catch (e) {
     console.warn('[ws] resetHumanPresenceOnBoot failed', e)
   }
@@ -1177,6 +1160,22 @@ async function postDocMentionWake(args: {
       [messageId, conversationId, mentionerId, body, sequence, companyId],
     )
     await client.query(`UPDATE conversations SET updated_at = NOW() WHERE id = $1`, [conversationId])
+    // Same transaction as the message row. A Redis blip used to leave this
+    // wake committed and unpublished, and nothing scanned for it later.
+    await enqueueBroadcast(client, CH_MESSAGE_NEW, {
+      type: 'message.new',
+      companyId,
+      conversationId,
+      message: {
+        id: messageId,
+        conversationId,
+        authorId: mentionerId,
+        kind: 'text',
+        body,
+        sequence,
+        at: new Date().toISOString(),
+      },
+    })
     await client.query('COMMIT')
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})
@@ -1184,27 +1183,7 @@ async function postDocMentionWake(args: {
   } finally {
     client.release()
   }
-
-  // Publish on the same bus chat messages use → scheduler wakes the
-  // agent's pod, the turn loop drains the inbox, the agent sees this
-  // message with the doc id verbatim.
-  const event: MessageNewEvent = {
-    type: 'message.new',
-    companyId,
-    conversationId,
-    message: {
-      id: messageId,
-      conversationId,
-      authorId: mentionerId,
-      kind: 'text',
-      body,
-      sequence,
-      at: new Date().toISOString(),
-    },
-  }
-  await publish(CH_MESSAGE_NEW, event).catch((error) => {
-    console.warn(`[doc.mention] durable wake ${messageId} committed but publish failed`, error)
-  })
+  nudgeRealtimeOutbox()
 }
 
 export function attachWebSocket(httpServer: Server) {

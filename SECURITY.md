@@ -79,14 +79,15 @@ compensating controls are written down in
 [`server/k8s/gke.md`](server/k8s/gke.md) under "Agent policy and runtime
 security prerequisites".
 
-**Inbound email is not authenticated.** `workers/email-gate` accepts mail
-whose recipient domain is listed. It does not read `Authentication-Results`
-and does not check SPF, DKIM, or DMARC. The server then maps the `From:`
-header onto an agent or a human in the recipient's workspace. A spoofed
-`From:` can show up as an internal author and enter an agent's context.
-The HMAC on `/webhooks/email/inbound` authenticates the worker to the
-server. It says nothing about the sender. Details are in
-[`docs/email.md`](docs/email.md).
+**Inbound email is authenticated before it can wear an internal identity.**
+`workers/email-gate` accepts mail whose recipient domain is listed. It
+reports Cloudflare's `Authentication-Results` (`mx.cloudflare.net` only) as
+`authVerdict`, plus the SMTP envelope sender. The server maps the `From:`
+header onto an agent or a human in the recipient's workspace only when that
+verdict is `aligned` and the envelope mailbox is the same address.
+Otherwise the author is `external:<addr>`. The HMAC on
+`/webhooks/email/inbound` authenticates the worker to the server. Details
+are in [`docs/email.md`](docs/email.md).
 
 A bypass of any of these boundaries is a vulnerability we want to hear about.
 

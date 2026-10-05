@@ -379,7 +379,8 @@ export async function joinAllHands(args: {
   // update — broadcast misses are tolerable (the 60s refresher backfills),
   // a DB hiccup here should not roll back the actual membership change.
   try {
-    const { CH_STATUS, publish } = await import('./redis.js')
+    const { CH_STATUS } = await import('./redis.js')
+    const { enqueueBroadcast, nudgeRealtimeOutbox } = await import('./realtime-outbox.js')
     const { rows: pRow } = await pool.query<{
       id: string; kind: string; name: string; role: string | null;
       initial: string; avatar_bg: string; avatar_url: string | null;
@@ -393,7 +394,7 @@ export async function joinAllHands(args: {
     )
     const p = pRow[0]
     if (p && (p.kind === 'human' || p.kind === 'agent')) {
-      await publish(CH_STATUS, {
+      await enqueueBroadcast(pool, CH_STATUS, {
         type: 'participants.added',
         companyId,
         conversationId: convId,
@@ -405,6 +406,7 @@ export async function joinAllHands(args: {
           statusUpdatedAt: p.status_updated_at,
         },
       })
+      nudgeRealtimeOutbox()
     }
   } catch (e) {
     console.warn('[onboard] participants.added broadcast failed', e instanceof Error ? e.message : e)

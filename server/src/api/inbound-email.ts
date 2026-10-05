@@ -9,9 +9,10 @@
  *   2. Parses recipients → resolves each to an in-tenant agent. Fans out
  *      the same delivery to every recognized recipient (so a To: with two
  *      agents creates messages in two threads, one per recipient).
- *   3. Resolves the sender — known agent, known human (by users.email),
- *      else synthetic `external:<addr>` so the conversation has someone
- *      to be "from".
+ *   3. Resolves the sender. A known agent or a known human (by users.email)
+ *      is used only when the gate reported authVerdict "aligned" and the
+ *      header From is the same mailbox as the SMTP envelope sender.
+ *      Otherwise the author is synthetic `external:<addr>`.
  *   4. Threading: in-reply-to / references → existing email_messages row
  *      → existing conversation; else new one with subject as title.
  *   5. Persists messages + email_messages rows via the shared write path
@@ -118,6 +119,13 @@ interface InboundPayload {
   /** Lowercased Auto-Submitted header value, or null when absent / "no".
    *  Heartbeat uses this to skip auto-replying to automation. */
   autoSubmitted?: string | null
+  /** Set by the email gate from Cloudflare's Authentication-Results.
+   *  Missing, or any value other than the exact string "aligned", means
+   *  the header From is not an internal author. */
+  authVerdict?: unknown
+  /** SMTP MAIL FROM observed by the gate. Internal attribution also
+   *  requires this mailbox to equal the header From. */
+  envelopeFrom?: unknown
   /** Optional attachment list forwarded from the worker. Each entry's
    *  contentBase64 is the raw bytes; truncated=true means the worker
    *  refused to forward the body (oversize) and we should record metadata
@@ -231,20 +239,46 @@ interface ResolvedSender {
   displayName: string | null
 }
 
+/**
+ * Internal attribution requires both halves. `aligned` means the gate saw
+ * exactly one Cloudflare Authentication-Results record that passed. The
+ * address comparison means that record belongs to this mailbox, not merely
+ * to some other sender at the same domain. Anything else — a missing field
+ * from a gate that has not been redeployed, a forged header, a bounce
+ * address — stays on the external author path.
+ */
+export function inboundSenderAuthenticated(args: {
+  authVerdict: unknown
+  envelopeFrom: unknown
+  headerFrom: string
+}): boolean {
+  if (args.authVerdict !== 'aligned') return false
+  if (typeof args.envelopeFrom !== 'string') return false
+  const header = parseAddress(args.headerFrom)
+  const envelope = parseAddress(args.envelopeFrom)
+  if (!header || !envelope) return false
+  return header.addr === envelope.addr
+}
+
 /** Resolve "From:" to a participant in the recipient's company.
- *  Hierarchy: known agent → known human user → synthetic external. */
+ *  Hierarchy, and only when `allowInternal`: known agent → known human
+ *  user → synthetic external. Unauthenticated mail skips the first two
+ *  lookups so a spoofed From cannot wear a member's identity. */
 async function resolveSender(args: {
   fromAddr: string
   fromName: string | null
   companyId: string
+  allowInternal: boolean
 }): Promise<ResolvedSender> {
-  // Same-tenant agent is the most common cross-agent case.
-  const agent = await findParticipantByAddress(args.fromAddr, args.companyId)
-  if (agent) return { participantId: agent.id, displayName: agent.name }
-  // A human in this workspace replied from their real email (e.g. yetone
-  // hits "reply" in Gmail to a thread an agent started).
-  const user = await findUserInCompanyByAuthEmail(args.fromAddr, args.companyId)
-  if (user) return { participantId: user.id, displayName: user.displayName }
+  if (args.allowInternal) {
+    // Same-tenant agent is the most common cross-agent case.
+    const agent = await findParticipantByAddress(args.fromAddr, args.companyId)
+    if (agent) return { participantId: agent.id, displayName: agent.name }
+    // A human in this workspace replied from their real email (e.g. yetone
+    // hits "reply" in Gmail to a thread an agent started).
+    const user = await findUserInCompanyByAuthEmail(args.fromAddr, args.companyId)
+    if (user) return { participantId: user.id, displayName: user.displayName }
+  }
   // Stranger / external collaborator. Synthetic id keeps the foreign-key
   // shape happy without us inventing a participants row for every random
   // address that might never email us again. The "external:" prefix is
@@ -471,6 +505,11 @@ inboundEmailRouter.post('/inbound', async (req: Request, res: Response) => {
       fromAddr: fromParsed.addr,
       fromName: fromParsed.name,
       companyId,
+      allowInternal: inboundSenderAuthenticated({
+        authVerdict: payload.authVerdict,
+        envelopeFrom: payload.envelopeFrom,
+        headerFrom: payload.from,
+      }),
     })
     const allRecipientParticipantIds = companyRecipients.map((r) => r.participantId)
     const memberIds = Array.from(new Set([sender.participantId, ...allRecipientParticipantIds]))

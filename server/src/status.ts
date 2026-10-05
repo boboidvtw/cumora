@@ -1,5 +1,6 @@
 import { pool } from './db/pool.js'
-import { CH_STATUS, publish } from './redis.js'
+import { CH_STATUS } from './redis.js'
+import { enqueueBroadcast, nudgeRealtimeOutbox } from './realtime-outbox.js'
 
 export const BUSY_STATUS_LEASE_MS = 90_000
 export const BUSY_STATUS_HEARTBEAT_MS = 20_000
@@ -32,50 +33,69 @@ export async function setStatus(participantId: string, status: ParticipantStatus
   // second (each fan-out re-resolving the tenant's WS recipients on every
   // replica) to announce a status nobody changed. Busy statuses still always
   // write: a repeat is a lease renewal.
-  const { rows } = await pool.query<{ company_id: string; status_updated_at: Date }>(
-    status === 'avail'
-      ? `UPDATE participants
-            SET status = $2,
-                status_updated_at = NOW()
-          WHERE id = $1 AND status IS DISTINCT FROM $2
-          RETURNING company_id, status_updated_at`
-      : `UPDATE participants
-            SET status = $2,
-                status_updated_at = NOW()
-          WHERE id = $1
-          RETURNING company_id, status_updated_at`,
-    [participantId, status],
-  )
-  for (const r of rows) {
-    await publish(CH_STATUS, {
-      type: 'participants.status',
-      participantId,
-      status,
-      statusUpdatedAt: toIso(r.status_updated_at),
-      companyId: r.company_id,
-    }).catch((error) => {
-      console.warn(`[status] durable ${participantId}=${status} update committed but publish failed`, error)
-    })
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query<{ company_id: string; status_updated_at: Date }>(
+      status === 'avail'
+        ? `UPDATE participants
+              SET status = $2,
+                  status_updated_at = NOW()
+            WHERE id = $1 AND status IS DISTINCT FROM $2
+            RETURNING company_id, status_updated_at`
+        : `UPDATE participants
+              SET status = $2,
+                  status_updated_at = NOW()
+            WHERE id = $1
+            RETURNING company_id, status_updated_at`,
+      [participantId, status],
+    )
+    for (const r of rows) {
+      await enqueueBroadcast(client, CH_STATUS, {
+        type: 'participants.status',
+        participantId,
+        status,
+        statusUpdatedAt: toIso(r.status_updated_at),
+        companyId: r.company_id,
+      })
+    }
+    await client.query('COMMIT')
+    if (rows.length > 0) nudgeRealtimeOutbox()
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
   }
 }
 
 /** Renew a busy status lease without changing the semantic status. */
 export async function heartbeatStatus(participantId: string, status: Extract<ParticipantStatus, 'working' | 'thinking' | 'waiting'>): Promise<void> {
-  const { rows } = await pool.query<{ company_id: string; status_updated_at: Date }>(
-    `UPDATE participants
-        SET status_updated_at = NOW()
-      WHERE id = $1 AND status = $2
-      RETURNING company_id, status_updated_at`,
-    [participantId, status],
-  )
-  if (!rows[0]) return
-  await publish(CH_STATUS, {
-    type: 'participants.status',
-    participantId,
-    status,
-    statusUpdatedAt: toIso(rows[0].status_updated_at),
-    companyId: rows[0].company_id,
-  }).catch((error) => {
-    console.warn(`[status] durable ${participantId} heartbeat committed but publish failed`, error)
-  })
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query<{ company_id: string; status_updated_at: Date }>(
+      `UPDATE participants
+          SET status_updated_at = NOW()
+        WHERE id = $1 AND status = $2
+        RETURNING company_id, status_updated_at`,
+      [participantId, status],
+    )
+    if (rows[0]) {
+      await enqueueBroadcast(client, CH_STATUS, {
+        type: 'participants.status',
+        participantId,
+        status,
+        statusUpdatedAt: toIso(rows[0].status_updated_at),
+        companyId: rows[0].company_id,
+      })
+    }
+    await client.query('COMMIT')
+    if (rows[0]) nudgeRealtimeOutbox()
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
 }

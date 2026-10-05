@@ -20,8 +20,10 @@ JSON body. It is mounted beside `/api`, not under it.
 
 `POST /webhooks/email/inbound` does not use either of those. It checks
 `x-cumora-signature` against `EMAIL_INBOUND_HMAC_SECRET`. The signature
-proves the worker sent the body. It does not prove who the `From:` header is.
-See [email.md](email.md).
+proves the worker sent the body. The worker's `authVerdict` and
+`envelopeFrom` are what prove the `From:` header. The server attributes the
+message to a workspace member only when the verdict is `aligned` and the
+envelope mailbox matches. See [email.md](email.md).
 
 ## Errors, pagination, idempotency
 

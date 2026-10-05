@@ -45,6 +45,12 @@ export function _resetIdleForTests(): void {
   classifyAgenda = classifyAgendaActionable
 }
 
+/** Session advisory lock. Distinct from the schema, rollup, and scanner keys.
+ * A replica that loses it skips the tick. The session releases the lock if
+ * this process dies mid-tick. */
+const IDLE_LOCK_KEY = 7_643_178_926_425n
+let idleTickRunning = false
+
 interface IdleCandidate {
   id: string
   name: string
@@ -120,8 +126,26 @@ function agendaHasItems(agenda: AgentAgenda): boolean {
 }
 
 export async function runIdleTick(): Promise<void> {
+  const client = await pool.connect()
+  try {
+    const lock = await client.query<{ ok: boolean }>(
+      'SELECT pg_try_advisory_lock($1) AS ok', [IDLE_LOCK_KEY],
+    )
+    if (lock.rows[0]?.ok !== true) return
+    try {
+      await runIdleTickUnlocked()
+    } finally {
+      await client.query('SELECT pg_advisory_unlock($1)', [IDLE_LOCK_KEY])
+        .catch(() => { /* session teardown releases it anyway */ })
+    }
+  } finally {
+    client.release()
+  }
+}
+
+async function runIdleTickUnlocked(): Promise<void> {
   const { rows: tenants } = await pool.query<{ id: string }>(
-    `SELECT id FROM companies`,
+    `SELECT id FROM companies ORDER BY id`,
   )
   for (const { id: companyId } of tenants) {
     try {
@@ -212,6 +236,13 @@ export async function runIdleTick(): Promise<void> {
 export function startIdleScheduler(intervalMs: number): NodeJS.Timeout | null {
   if (intervalMs <= 0) return null
   return setInterval(() => {
-    runIdleTick().catch((e) => console.error('[idle]', e))
+    if (idleTickRunning) {
+      console.warn('[idle] previous tick still running — skipping')
+      return
+    }
+    idleTickRunning = true
+    runIdleTick()
+      .catch((e) => console.error('[idle]', e))
+      .finally(() => { idleTickRunning = false })
   }, intervalMs)
 }

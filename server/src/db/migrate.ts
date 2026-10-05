@@ -2781,6 +2781,12 @@ export async function ensureSchema(): Promise<void> {
       }
 
       const finalHistory = validateMigrationHistory(await readHistory())
+      // The creators below used to live only inside migration 0001. After that
+      // version is in the ledger they never ran again, while this gate still
+      // failed the Job if a required index was missing or invalid. Both
+      // helpers are re-entrant: a valid index is a catalog read and a return.
+      await ensureMessageClientIdIndex(client)
+      await buildConcurrentIndexes(client)
       await verifyRequiredIndexes(client)
       console.log(`[db] schema is current at version ${finalHistory.currentVersion}`)
     } finally {
@@ -2937,13 +2943,11 @@ async function buildConcurrentIndexes(client: import('pg').PoolClient): Promise<
   const indexes: Array<{ name: string; create: string }> = [
     {
       name: 'idx_conversations_members_gin',
-      // DO NOT DROP. This name is in BASELINE_REQUIRED_SCHEMA_INDEXES.
-      // verifyRequiredIndexes fails the migration Job when the index is
-      // missing or invalid, and this function is the only creator — it runs
-      // from the legacy baseline, not on later deploys. Dropping it blocks
-      // every subsequent deploy with no code path to rebuild it.
-      // To retire it: remove the name from BASELINE_REQUIRED_SCHEMA_INDEXES
-      // and drop the index in the same commit, in that order.
+      // This name is in BASELINE_REQUIRED_SCHEMA_INDEXES. ensureSchema calls
+      // this function before verifyRequiredIndexes on every migration Job, so
+      // a missing or invalid index is rebuilt here. To retire it: remove the
+      // name from BASELINE_REQUIRED_SCHEMA_INDEXES and drop the index in the
+      // same commit, in that order.
       // `loadInbox` / `loadContext` / inbox-triage no longer read
       // `members @> [agentId]`; they use `conversation_members`. That does
       // not make the boot gate optional. This build's schema range also

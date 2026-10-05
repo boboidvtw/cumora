@@ -116,6 +116,7 @@ async function claimBatch(limit: number): Promise<PendingBroadcast[]> {
     channel: string
     payload: BroadcastEvent
     attempts: number
+    created_at: Date | string
   }>(
     `WITH candidates AS (
        SELECT id
@@ -135,10 +136,23 @@ async function claimBatch(limit: number): Promise<PendingBroadcast[]> {
             locked_until = NOW() + ($5 * INTERVAL '1 millisecond')
        FROM candidates c
       WHERE o.id = c.id
-      RETURNING o.id, o.channel, o.payload, o.attempts`,
+      RETURNING o.id, o.channel, o.payload, o.attempts, o.created_at`,
     [limit, workerId, MAX_ATTEMPTS, MAX_AGE_HOURS, CLAIM_LEASE_MS],
   )
   return rows
+    .map((row) => ({
+      id: row.id,
+      channel: row.channel,
+      payload: row.payload,
+      attempts: row.attempts,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    }))
+    .sort(compareOutboxRows)
+}
+
+export function compareOutboxRows(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
+  const byTime = a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0
+  return byTime || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 
 async function discardExpired(): Promise<number> {
@@ -218,9 +232,9 @@ export async function drainRealtimeOutbox(options: {
   let published = 0
   let failed = 0
 
-  // Bound simultaneous Redis calls so a large recovered queue cannot create a
-  // connection spike. Promise.all is safe at this batch size (32).
-  await Promise.all(rows.map(async (row) => {
+  // In claim order. Promise.all would let a later event reach Redis before
+  // an earlier one from the same batch, and the scheduler wakes from this bus.
+  for (const row of rows) {
     try {
       await publishFn(row.channel, row.payload)
       await markPublished(row.id)
@@ -229,7 +243,7 @@ export async function drainRealtimeOutbox(options: {
       await markFailed(row, error)
       failed += 1
     }
-  }))
+  }
 
   return { claimed: rows.length, published, failed, discarded }
 }

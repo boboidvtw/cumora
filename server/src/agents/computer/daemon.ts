@@ -39,6 +39,7 @@ import {
 } from '../memory-scope.js'
 import { parseSseStream, wakeStreamWasStable } from '../runtime/sse-parse.js'
 import { type ProviderProfile, providerProfileEnv, providerProfileFingerprint, providerProfileMetadata, readProviderProfiles, redactProviderSecret } from './provider-profiles.js'
+import { modelIdOrNull } from './model-id.js'
 import { parseComputerControlEvent } from './control-event.js'
 import {
   mergeWakeBackgroundBriefs,
@@ -1713,8 +1714,9 @@ export function resolveEngineModel(
   override: string | undefined,
 ): string | null {
   const o = override?.trim()
-  if (!o) return configured ?? null
-  return o.toLowerCase() === ENGINE_MODEL_LOCAL ? null : o
+  if (!o) return modelIdOrNull(configured)
+  if (o.toLowerCase() === ENGINE_MODEL_LOCAL) return null
+  return modelIdOrNull(o)
 }
 
 /** The same knob governs the small-brain pin. `local` has to impose NOTHING:
@@ -1726,7 +1728,7 @@ export function resolveEngineFastModel(
   configured: string | null | undefined,
   override: string | undefined,
 ): string | null {
-  return override?.trim().toLowerCase() === ENGINE_MODEL_LOCAL ? null : (configured ?? null)
+  return override?.trim().toLowerCase() === ENGINE_MODEL_LOCAL ? null : modelIdOrNull(configured)
 }
 
 /** Resolve the actual classifier model. A member-specific small brain is more

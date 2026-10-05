@@ -3,9 +3,19 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { env } from '../env.js'
 import * as schema from './schema.js'
 
+/** Main request pool size. `DATABASE_POOL_MAX` overrides the default of 20.
+ * Values that are not an integer from 1 to 100 fall back to 20 so a bad
+ * env var cannot open an unbounded number of Cloud SQL connections. */
+export function databasePoolMax(raw = process.env.DATABASE_POOL_MAX): number {
+  if (raw == null || raw.trim() === '') return 20
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < 1 || n > 100) return 20
+  return n
+}
+
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
-  max: 20,
+  max: databasePoolMax(),
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
   // Defense-in-depth against connection-pool exhaustion. A single slow or stuck
@@ -22,6 +32,21 @@ export const pool = new Pool({
 
 pool.on('error', (err) => {
   console.error('[pg] idle client error', err)
+})
+
+/** Readiness uses its own single connection. `/api/health` must not wait
+ * behind the request pool it is supposed to report on. */
+export const healthPool = new Pool({
+  connectionString: env.DATABASE_URL,
+  max: 1,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 1_000,
+  statement_timeout: 1_000,
+  idle_in_transaction_session_timeout: 30_000,
+})
+
+healthPool.on('error', (err) => {
+  console.error('[pg] health pool error', err)
 })
 
 export const db = drizzle(pool, { schema })

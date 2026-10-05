@@ -96,6 +96,7 @@ spec:
     metadata:
       labels: { app: cumora-server }
     spec:
+      terminationGracePeriodSeconds: 60
       serviceAccountName: cumora-server
       # Image registry credentials. Create the Secret first:
       #   kubectl create secret docker-registry quay-pull \
@@ -132,6 +133,10 @@ spec:
       - name: server
         image: quay.io/yetoneful/cumora-server:REPLACE-TAG
         imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sleep", "15"]
         ports:
         - { name: http, containerPort: 5181 }
         envFrom:

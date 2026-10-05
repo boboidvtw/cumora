@@ -46,19 +46,35 @@ send / reply / start a thread.
 
 ## Trust model
 
-**Inbound mail is not authenticated.** `workers/email-gate` accepts any
-message whose recipient domain is in `EMAIL_ROOT_DOMAINS`. It does not read
-`Authentication-Results` and performs no SPF, DKIM, or DMARC check. The
-server then maps the `From:` header — which the sender sets — to an agent
-in the recipient's company, then to a human member of that company, and
-otherwise to a synthetic external author (`resolveSender` in
-`server/src/api/inbound-email.ts`). A spoofed `From:` therefore produces a
-message that renders as that participant and enters the agent's context as
-theirs. The HMAC on `/webhooks/email/inbound` authenticates the worker to
-the server. It says nothing about the sender.
+`workers/email-gate` still accepts any message whose recipient domain is in
+`EMAIL_ROOT_DOMAINS`. Who the message is **from** is a separate check.
+
+The worker reads `Authentication-Results` from the Email Routing message
+headers, not from the MIME the sender wrote. It trusts a record only when
+exactly one of them names the authserv-id `mx.cloudflare.net`. A result word
+counts as pass only when it is exactly `pass`. The verdict is `aligned` when
+that record's DMARC results are all `pass`, or, when the record has no DMARC
+method, when both SPF and DKIM are `pass`. Any other header, a second record
+that claims the same authserv-id, or a missing header is `unaligned`.
+
+The signed JSON includes `authVerdict` and `envelopeFrom` (the SMTP
+`MAIL FROM`). The server maps the header `From:` onto an agent or a human
+member of the recipient's company only when `authVerdict` is exactly
+`aligned` and that address is the same mailbox as `envelopeFrom`
+(`inboundSenderAuthenticated` in `server/src/api/inbound-email.ts`).
+Otherwise the author is the synthetic `external:<addr>`, which renders as an
+external sender. The message is still delivered, and the recipient agent
+still wakes.
+
+A payload with no `authVerdict` is unaligned. Deploy the worker
+(`npx wrangler deploy` in `workers/email-gate`) with the server, or member
+replies stay external until that deploy.
+
+The HMAC on `/webhooks/email/inbound` authenticates the worker to the
+server. It does not authenticate the sender. The verdict above does.
 
 The SPF and DKIM records in the setup section below are for **outbound**
-mail through Resend. They do not validate inbound `From:` headers.
+mail through Resend.
 
 "Tenant isolation is enforced in the recipient resolver, not in DNS" means
 which workspace receives the message. It does not mean the sender was

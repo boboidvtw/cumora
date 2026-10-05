@@ -5,8 +5,11 @@
  *   1. Reject (550) if the recipient domain isn't in EMAIL_ROOT_DOMAINS.
  *   2. Stream the raw MIME, parse with postal-mime.
  *   3. Build a JSON payload (message-id, in-reply-to, references, from,
- *      to, cc, subject, text, html, raw size, autoSubmitted, and
- *      attachments[] as base64 — see MAX_ATTACHMENT_BYTES / the total cap).
+ *      to, cc, subject, text, html, raw size, autoSubmitted,
+ *      authVerdict, envelopeFrom, and attachments[] as base64 — see
+ *      MAX_ATTACHMENT_BYTES / the total cap). authVerdict comes from
+ *      Cloudflare's Authentication-Results header, not from the sender's
+ *      copy of that header. See auth-verdict.ts.
  *   4. Sign with HMAC-SHA256(EMAIL_INBOUND_HMAC_SECRET, body) and POST
  *      to CUMORA_INBOUND_URL.
  *   5. Reject (550) if the server says "no recipient resolved" so the
@@ -16,6 +19,7 @@
  * goes through Resend on the server side.
  */
 import PostalMime from 'postal-mime'
+import { deriveAuthVerdict, type InboundAuthVerdict } from './auth-verdict.js'
 
 interface Env {
   EMAIL_INBOUND_HMAC_SECRET: string
@@ -56,6 +60,12 @@ interface InboundPayload {
    *  server can flag the row + refuse heartbeat auto-reply on it. null
    *  when the header was absent or set to "no". */
   autoSubmitted: string | null
+  /** `aligned` only when Cloudflare's own Authentication-Results record
+   *  authenticated this message. The server will not map `from` onto a
+   *  workspace member for any other value. */
+  authVerdict: InboundAuthVerdict
+  /** SMTP MAIL FROM, as Email Routing reported it in `message.from`. */
+  envelopeFrom: string
   attachments: InboundAttachment[]
 }
 
@@ -252,6 +262,8 @@ export default {
       html: parsed.html ?? null,
       rawSizeBytes: rawBytes.byteLength,
       autoSubmitted,
+      authVerdict: deriveAuthVerdict(message.headers),
+      envelopeFrom: message.from,
       attachments,
     }
     if (payload.to.length === 0) payload.to = [message.to]

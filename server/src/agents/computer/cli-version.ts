@@ -28,6 +28,7 @@ export function versionCommandInvocation(
   args: string[],
   platform = process.platform,
   comspec = process.env.ComSpec || 'cmd.exe',
+  forceShell = false,
 ): CommandInvocation {
   if (platform !== 'win32') return { command, args }
 
@@ -40,8 +41,15 @@ export function versionCommandInvocation(
       }
     }
   }
-  if (!/\.(?:cmd|bat)$/i.test(runnable)) return { command: runnable, args }
+  if (!forceShell && !/\.(?:cmd|bat)$/i.test(runnable)) return { command: runnable, args }
+  return comspecInvocation(comspec, runnable, args)
+}
 
+/** cmd.exe `/s /c` with one quoted command line. Node's `shell: true` joins
+ * argv without quoting, so a model id containing `&` becomes a second command.
+ * Arguments outside the unquoted token set are quoted; quotes inside them are
+ * doubled, which is cmd's escape. */
+function comspecInvocation(comspec: string, runnable: string, args: string[]): CommandInvocation {
   const commandArgs = args.map((arg) => {
     const value = String(arg)
     return /^[\w./:=+-]+$/u.test(value) ? value : `"${value.replace(/"/g, '""')}"`

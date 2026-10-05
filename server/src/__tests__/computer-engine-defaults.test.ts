@@ -109,6 +109,14 @@ test('a missing or inaccessible computer closes the transaction without writing'
   assert.deepEqual(state(), { stored: {}, releases: 1, commits: 1, rollbacks: 0 })
 })
 
+test('a model id with shell metacharacters is rejected and not stored', async () => {
+  const state = database({ claude: { model: 'original' } })
+  await assert.rejects(save({ claude: { model: 'sonnet & calc.exe' } }), /invalid model id/)
+  assert.deepEqual(state(), {
+    stored: { claude: { model: 'original' } }, releases: 1, commits: 0, rollbacks: 1,
+  })
+})
+
 test('a failed write rolls back and releases the connection', async () => {
   const state = database({ claude: { model: 'original' } }, { failWrite: true })
   await assert.rejects(save({ claude: { model: 'changed' } }), /write failed/)

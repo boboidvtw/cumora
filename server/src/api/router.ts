@@ -10,12 +10,13 @@
  */
 import { Router, json, type Request, type Response, type NextFunction } from 'express'
 import { isProviderProfileId } from '../agents/computer/provider-profiles.js'
+import { InvalidModelIdError, parseModelId } from '../agents/computer/model-id.js'
 import type { PoolClient } from 'pg'
 import {
   storage, UPLOAD_DIR, freshenAttachmentUrl, normalizeStorageKey,
   storageKeyFromPublicUrl, messageAttachmentStorageKey,
 } from '../storage.js'
-import { pool } from '../db/pool.js'
+import { healthPool, pool } from '../db/pool.js'
 import { CH_MESSAGE_NEW, CH_REACTIONS, CH_CONVO_UPDATED, CH_DOCS, CH_TYPING, CH_CALENDAR_EVENTS, CH_BOARDS, CH_STATUS, CH_WORKSPACES, publish } from '../redis.js'
 import { enqueueBroadcast, nudgeRealtimeOutbox, withOutboxTransaction } from '../realtime-outbox.js'
 import { enqueueWorkspaceCleanup, nudgeWorkspaceCleanupWorker } from '../workspace-cleanup.js'
@@ -679,7 +680,7 @@ api.get('/livez', (_req, res) => { res.json({ ok: true, ts: Date.now() }) })
 api.get('/health', async (_req, res) => {
   try {
     await Promise.race([
-      pool.query('SELECT 1'),
+      healthPool.query('SELECT 1'),
       new Promise((_, reject) => setTimeout(() => reject(new Error('health db check timed out')), 1000)),
     ])
     res.json({ ok: true, ts: Date.now() })
@@ -1365,11 +1366,17 @@ api.put('/computers/:id/engine-defaults', safe(async (req, res) => {
   if (!defaults || typeof defaults !== 'object') {
     throw new HttpError(400, 'defaults object required')
   }
-  const updated = await updateEngineDefaults({
-    computerId: String(req.params.id),
-    companyId,
-    defaults,
-  })
+  let updated: Awaited<ReturnType<typeof updateEngineDefaults>>
+  try {
+    updated = await updateEngineDefaults({
+      computerId: String(req.params.id),
+      companyId,
+      defaults,
+    })
+  } catch (error) {
+    if (error instanceof InvalidModelIdError) throw new HttpError(400, 'invalid model id')
+    throw error
+  }
   if (updated === null) throw new HttpError(404, 'computer not found')
   res.json({ ok: true, defaults: updated })
 }))
@@ -2997,10 +3004,15 @@ function readAgentBody(b: AgentBody): {
   if (typeof b.avatarBg === 'string')     out.avatarBg = b.avatarBg.trim()
   if (b.avatarUrl === null)               out.avatarUrl = null
   else if (typeof b.avatarUrl === 'string') out.avatarUrl = b.avatarUrl.trim()
-  if (b.model === null)                   out.model = null
-  else if (typeof b.model === 'string')   out.model = b.model.trim() || null
-  if (b.fastModel === null)               out.fastModel = null
-  else if (typeof b.fastModel === 'string') out.fastModel = b.fastModel.trim() || null
+  try {
+    const model = parseModelId(b.model)
+    const fastModel = parseModelId(b.fastModel)
+    if (model !== undefined) out.model = model
+    if (fastModel !== undefined) out.fastModel = fastModel
+  } catch (error) {
+    if (error instanceof InvalidModelIdError) throw new HttpError(400, 'invalid model id')
+    throw error
+  }
   if (Array.isArray(b.tools))             out.tools = b.tools.map((x) => String(x))
   return out as ReturnType<typeof readAgentBody>
 }

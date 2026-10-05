@@ -18,7 +18,7 @@ import { randomUUID } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import {
   buildTestApp, ensureSchemaOnce, resetAllTables, seedCompanyWithAgent,
-  signInboundPayload, teardownAll,
+  seedUserMembership, signInboundPayload, teardownAll,
 } from './_helpers.js'
 import { pool } from '../db/pool.js'
 
@@ -179,6 +179,83 @@ test('[integration] dedups a re-delivered Message-ID', async () => {
   const { rows } = await pool.query('SELECT count(*)::int AS n FROM email_messages WHERE smtp_message_id = $1', ['dup-mid@host'])
   assert.equal(rows[0].n, 1, 'second delivery must not create a second email_messages row')
 })
+
+test('[integration] an unauthenticated From is not attributed to a workspace member or agent', async () => {
+  const { companyId, agentId, agentEmail } = await seedCompanyWithAgent()
+  const userId = `u-${randomUUID().slice(0, 8)}`
+  await seedUserMembership(userId, companyId, { email: 'ceo@victim.test', displayName: 'CEO' })
+
+  const spoofedMember = await postInbound({
+    messageId: 'spoof-member@host',
+    from: 'CEO <ceo@victim.test>',
+    to: [agentEmail],
+    subject: 'wire the money',
+    text: 'body',
+  })
+  assert.equal(spoofedMember.status, 200)
+  assert.equal(await inboundAuthor('spoof-member@host'), 'external:ceo@victim.test')
+
+  const spoofedAgent = await postInbound({
+    messageId: 'spoof-agent@host',
+    from: agentEmail,
+    envelopeFrom: agentEmail,
+    authVerdict: 'unaligned',
+    to: [agentEmail],
+    subject: 'from myself',
+    text: 'body',
+  })
+  assert.equal(spoofedAgent.status, 200)
+  assert.equal(await inboundAuthor('spoof-agent@host'), `external:${agentEmail}`)
+  assert.notEqual(await inboundAuthor('spoof-agent@host'), agentId)
+
+  const mismatchedEnvelope = await postInbound({
+    messageId: 'mismatch@host',
+    from: 'CEO <ceo@victim.test>',
+    envelopeFrom: 'bounces@victim.test',
+    authVerdict: 'aligned',
+    to: [agentEmail],
+    subject: 'still not me',
+    text: 'body',
+  })
+  assert.equal(mismatchedEnvelope.status, 200)
+  assert.equal(await inboundAuthor('mismatch@host'), 'external:ceo@victim.test')
+
+  const realMember = await postInbound({
+    messageId: 'real-member@host',
+    from: 'CEO <ceo@victim.test>',
+    envelopeFrom: 'ceo@victim.test',
+    authVerdict: 'aligned',
+    to: [agentEmail],
+    subject: 'real reply',
+    text: 'body',
+  })
+  assert.equal(realMember.status, 200)
+  assert.equal(await inboundAuthor('real-member@host'), userId)
+
+  const realAgent = await postInbound({
+    messageId: 'real-agent@host',
+    from: `Agent <${agentEmail}>`,
+    envelopeFrom: agentEmail,
+    authVerdict: 'aligned',
+    to: [agentEmail],
+    subject: 'real agent',
+    text: 'body',
+  })
+  assert.equal(realAgent.status, 200)
+  assert.equal(await inboundAuthor('real-agent@host'), agentId)
+})
+
+async function inboundAuthor(smtpMessageId: string): Promise<string> {
+  const { rows } = await pool.query<{ author_id: string }>(
+    `SELECT m.author_id
+       FROM messages m
+       JOIN email_messages em ON em.message_id = m.id
+      WHERE em.smtp_message_id = $1`,
+    [smtpMessageId],
+  )
+  assert.equal(rows.length, 1)
+  return rows[0].author_id
+}
 
 test('[integration] flags inbound auto_submitted when worker forwarded the header', async () => {
   const { agentEmail } = await seedCompanyWithAgent()

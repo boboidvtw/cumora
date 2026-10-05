@@ -31,7 +31,7 @@ import { basename, dirname, isAbsolute, join, delimiter as PATH_DELIMITER } from
 import { StringDecoder } from 'node:string_decoder'
 import { stripLoneSurrogates } from '../text-safety.js'
 import { isCustomAnthropicEndpoint, readClaudeUserSettings, withClaudeUserSettingsEnv } from './claude-user-settings.js'
-import { isCliVersionAtLeast, probeEngineVersion, probeLocalEngineVersionWithRetry } from './cli-version.js'
+import { isCliVersionAtLeast, probeEngineVersion, probeLocalEngineVersionWithRetry, versionCommandInvocation } from './cli-version.js'
 import { discoverEngineModelCatalog, type EngineModelCatalog } from './model-catalog.js'
 
 const IS_WIN = process.platform === 'win32'
@@ -48,8 +48,38 @@ export function headlessSpawnOptions(options: SpawnOptions = {}): SpawnOptions {
   return { ...options, windowsHide: true }
 }
 
+/** What `spawn` will actually execute. On Windows, `shell: true` is rewritten
+ * to an explicit `cmd.exe /d /s /c` invocation with quoted arguments. Node's
+ * own `shell: true` does not quote argv, so a model id can break out of the
+ * command. Exported so the rewrite can be tested off Windows. */
+export function shellSafeSpawnPlan(
+  command: string,
+  args: string[],
+  options: SpawnOptions = {},
+  platform = process.platform,
+): { command: string; args: string[]; options: SpawnOptions } {
+  if (options.shell && platform === 'win32') {
+    const unquoted = command.length >= 2 && command.startsWith('"') && command.endsWith('"')
+      ? command.slice(1, -1)
+      : command
+    const invocation = versionCommandInvocation(unquoted, args, platform, process.env.ComSpec || 'cmd.exe', true)
+    const { shell: _shell, ...rest } = options
+    return {
+      command: invocation.command,
+      args: invocation.args,
+      options: headlessSpawnOptions({
+        ...rest,
+        shell: false,
+        windowsVerbatimArguments: invocation.windowsVerbatimArguments === true,
+      }),
+    }
+  }
+  return { command, args, options: headlessSpawnOptions(options) }
+}
+
 function spawn(command: string, args: string[], options: SpawnOptions = {}): ChildProcess {
-  return nodeSpawn(command, args, headlessSpawnOptions(options))
+  const plan = shellSafeSpawnPlan(command, args, options)
+  return nodeSpawn(plan.command, plan.args, plan.options)
 }
 
 /** Model tools may spawn descendants that outlive the CLI parent. Put every

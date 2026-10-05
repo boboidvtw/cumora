@@ -232,6 +232,10 @@ export async function teardownAll(server?: import('node:http').Server): Promise<
   // errors when multiple test files share the singleton.
   try { await pool.end() } catch { /* ignore */ }
   try {
+    const { healthPool } = await import('../db/pool.js')
+    await healthPool.end()
+  } catch { /* ignore */ }
+  try {
     const { redis, sub } = await import('../redis.js')
     redis.disconnect()
     sub.disconnect()

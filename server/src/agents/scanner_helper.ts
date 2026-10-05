@@ -2,7 +2,8 @@
 import { randomUUID } from 'node:crypto'
 import { pool } from '../db/pool.js'
 import { dispatchMessagePush } from '../push.js'
-import { CH_GROUP_PULLED, CH_MESSAGE_NEW, publish } from '../redis.js'
+import { CH_GROUP_PULLED, CH_MESSAGE_NEW } from '../redis.js'
+import { enqueueBroadcast, nudgeRealtimeOutbox } from '../realtime-outbox.js'
 
 /** Hours an agent must wait between human-interrupting group pulls. */
 const PULL_COOLDOWN_HOURS = 6
@@ -119,6 +120,18 @@ export async function startPulledGroup(args: {
        VALUES ($1, $2, $3, 'text', $4, 1, $5)`,
       [messageId, conversationId, instigatorId, opening, companyId],
     )
+    await enqueueBroadcast(client, CH_GROUP_PULLED, {
+      type: 'group.pulled', conversationId, companyId, pulledById: instigatorId,
+    })
+    await enqueueBroadcast(client, CH_MESSAGE_NEW, {
+      type: 'message.new',
+      conversationId,
+      companyId,
+      message: {
+        id: messageId, conversationId, authorId: instigatorId,
+        kind: 'text', body: opening, sequence: 1, at: pulledAt,
+      },
+    })
     await client.query('COMMIT')
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})
@@ -126,23 +139,7 @@ export async function startPulledGroup(args: {
   } finally {
     client.release()
   }
-
-  await publish(CH_GROUP_PULLED, {
-    type: 'group.pulled', conversationId, companyId, pulledById: instigatorId,
-  }).catch((error) => {
-    console.warn(`[pull_group] durable conversation ${conversationId} committed but group publish failed`, error)
-  })
-  await publish(CH_MESSAGE_NEW, {
-    type: 'message.new',
-    conversationId,
-    companyId,
-    message: {
-      id: messageId, conversationId, authorId: instigatorId,
-      kind: 'text', body: opening, sequence: 1, at: pulledAt,
-    },
-  }).catch((error) => {
-    console.warn(`[pull_group] durable message ${messageId} committed but publish failed`, error)
-  })
+  nudgeRealtimeOutbox()
 
   // The point of a pull is to interrupt someone — there is a six-hour cooldown
   // on it for exactly that reason. Yet the interruption reached the websocket

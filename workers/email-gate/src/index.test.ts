@@ -23,6 +23,7 @@ import worker, {
   MAX_ATTACHMENT_BYTES,
   MAX_TOTAL_ATTACHMENT_BYTES,
 } from './index.js'
+import { deriveAuthVerdict } from './auth-verdict.js'
 
 /* ============================ recipientAccepted ============================ */
 
@@ -125,6 +126,69 @@ test('getHeader returns first match', () => {
     { key: 'x-foo', value: 'second' },
   ]
   assert.equal(getHeader(headers, 'X-Foo'), 'first')
+})
+
+/* ============================== deriveAuthVerdict ========================= */
+
+const cf = (value: string) => [{ key: 'Authentication-Results', value: `mx.cloudflare.net; ${value}` }]
+
+test('authVerdict is derived from Cloudflare Authentication-Results', () => {
+  assert.equal(deriveAuthVerdict(cf('dmarc=pass; spf=pass')), 'aligned')
+  assert.equal(deriveAuthVerdict(cf('spf=pass; dkim=pass')), 'aligned')
+  assert.equal(
+    deriveAuthVerdict(cf('spf=pass; dkim=fail')),
+    'unaligned',
+    'SPF pass alone does not authenticate the header From',
+  )
+  assert.equal(
+    deriveAuthVerdict([{ key: 'Authentication-Results', value: 'mx.cloudflare.net; dmarc=pass-not-really' }]),
+    'unaligned',
+    'a longer token that starts with "pass" is not a pass',
+  )
+  assert.equal(deriveAuthVerdict(cf('dmarc=passfail')), 'unaligned')
+  assert.equal(deriveAuthVerdict(cf('dmarc=pass/fail')), 'unaligned')
+})
+
+test('authVerdict ignores a pass that only appears inside a comment', () => {
+  assert.equal(deriveAuthVerdict(cf('spf=fail (dmarc=pass)')), 'unaligned')
+})
+
+test('authVerdict ignores a sender-forged Authentication-Results authserv-id', () => {
+  assert.equal(
+    deriveAuthVerdict([{ key: 'Authentication-Results', value: 'attacker.example; dmarc=pass' }]),
+    'unaligned',
+  )
+  assert.equal(deriveAuthVerdict(cf('xdmarc=pass')), 'unaligned')
+  assert.equal(deriveAuthVerdict(undefined), 'unaligned')
+})
+
+test('authVerdict fails closed when two records claim Cloudflare', () => {
+  assert.equal(deriveAuthVerdict([
+    { key: 'Authentication-Results', value: 'mx.cloudflare.net; dmarc=pass' },
+    { key: 'Authentication-Results', value: 'mx.cloudflare.net; dmarc=fail' },
+  ]), 'unaligned')
+  // Fetch Headers joins repeated fields with ", " before the worker sees them.
+  const headers = new Headers()
+  headers.append('authentication-results', 'mx.cloudflare.net; dmarc=pass')
+  headers.append('authentication-results', 'mx.cloudflare.net; dmarc=fail')
+  assert.equal(deriveAuthVerdict(headers), 'unaligned')
+})
+
+test('authVerdict uses the single Cloudflare record and ignores a forged one', () => {
+  assert.equal(deriveAuthVerdict([
+    { key: 'Authentication-Results', value: 'attacker.example; dmarc=pass' },
+    { key: 'Authentication-Results', value: 'mx.cloudflare.net; dmarc=fail header.from=victim.test' },
+  ]), 'unaligned')
+  assert.equal(deriveAuthVerdict([
+    { key: 'Authentication-Results', value: 'attacker.example; dmarc=fail' },
+    { key: 'Authentication-Results', value: 'mx.cloudflare.net;\r\n\tdmarc=pass (p=REJECT) header.from=victim.test' },
+  ]), 'aligned')
+})
+
+test('authVerdict treats any DMARC result other than pass as unaligned', () => {
+  assert.equal(deriveAuthVerdict(cf('spf=pass; dkim=pass; dmarc=fail')), 'unaligned')
+  assert.equal(deriveAuthVerdict(cf('spf=pass; dkim=pass; dmarc=none')), 'unaligned')
+  assert.equal(deriveAuthVerdict(cf('DMARC=Pass')), 'aligned')
 })
 
 /* ============================== attachment caps =========================== */
@@ -233,6 +297,8 @@ test('email handler forwards the envelope recipient it admitted the message on',
     (posted as { envelopeTo?: string }).envelopeTo, 'agent@cumora.ai',
     'the address the handler admitted this message on was not forwarded — a Bcc\'d agent resolves to nobody and gets a 550',
   )
+  assert.equal((posted as { authVerdict?: string }).authVerdict, 'unaligned')
+  assert.equal((posted as { envelopeFrom?: string }).envelopeFrom, 'alice@example.com')
   // The visible header is still reported as-is; envelopeTo is additive.
   assert.deepEqual((posted as { to?: string[] }).to, ['bob@example.com'])
 })
@@ -329,6 +395,49 @@ test('synthesizeMessageId produces a shape the server will accept', async () => 
   const id = await synthesizeMessageId(sameMessage)
   assert.match(id, /^synth-[0-9a-f]{64}@cumora-email-gate$/)
   assert.doesNotMatch(id, /[<>\s]/)
+})
+
+test('email handler forwards an aligned verdict from Cloudflare headers', async () => {
+  const rejected: string[] = []
+  const message = {
+    to: 'agent@cumora.ai',
+    from: 'alice@example.com',
+    headers: new Headers({
+      'authentication-results': 'mx.cloudflare.net; dmarc=pass header.from=example.com',
+    }),
+    raw: new Response(
+      'From: alice@example.com\r\nTo: agent@cumora.ai\r\nSubject: Test\r\nMessage-ID: <msg-auth@example.com>\r\nAuthentication-Results: attacker.example; dmarc=fail\r\n\r\nHello',
+    ).body!,
+    setReject: (reason: string) => { rejected.push(reason) },
+  } as unknown as Parameters<typeof worker.email>[0]
+
+  let posted: { authVerdict?: string; envelopeFrom?: string } | null = null
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (_url, init) => {
+    posted = JSON.parse(String((init as RequestInit).body))
+    return new Response('ok', { status: 200 })
+  }
+  try {
+    await worker.email(message, fakeEnv, fakeCtx)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.deepEqual(rejected, [])
+  assert.equal(posted?.authVerdict, 'aligned')
+  assert.equal(posted?.envelopeFrom, 'alice@example.com')
+})
+
+test('the email handler derives authVerdict instead of forwarding the raw header', async () => {
+  const source = await readFile(new URL('./index.ts', import.meta.url), 'utf8')
+  const handler = source.slice(source.indexOf('export default {'))
+  assert.match(handler, /deriveAuthVerdict\(message\.headers\)/)
+  assert.match(handler, /envelopeFrom:\s*message\.from/)
+  assert.doesNotMatch(
+    handler,
+    /dmarc=pass/,
+    'the handler must not match the Authentication-Results text itself',
+  )
 })
 
 test('the email handler synthesizes its id instead of drawing a random one', async () => {
