@@ -71,6 +71,7 @@ services:
       dockerfile: server/docker/cumora-server.Dockerfile
       args:
         VITE_CUMORA_DEFAULT_LOCALE: ${CUMORA_DEFAULT_LOCALE:-zh-TW}
+        VITE_CUMORA_HIDE_CLOUD_UPSELL: ${CUMORA_HIDE_CLOUD_UPSELL:-1}
     command: ["npm", "run", "migrate"]
     env_file: .env
     environment: *server-env

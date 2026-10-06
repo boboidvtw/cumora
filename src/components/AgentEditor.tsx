@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, getPairingServerOrigin, type AgentInput } from '@/api/client'
 import { isNativePlatform } from '@/lib/native'
+import { cloudUpsellEnabled } from '@/lib/cloud-upsell'
 import { useParticipants } from '@/stores/participants'
 import { useComputers } from '@/stores/computers'
 import { useConversations } from '@/stores/conversations'
@@ -458,7 +459,7 @@ export function AgentEditor({ agent, onClose, onSaved }: Props) {
                     label: `${c.kind === 'cloud' ? '☁' : c.kind === 'vps' ? '🖥' : '💻'} ${c.name}`
                       + (c.kind !== 'cloud' && c.status !== 'online' ? ` ${t('agent.offlineSuffix')}` : ''),
                   })),
-                ...(isFreeTier && !isNativePlatform()
+                ...(isFreeTier && !isNativePlatform() && cloudUpsellEnabled()
                   ? [{ value: '__cloud_pro__', label: t('agent.upgradeToPro'), disabled: true }]
                   : []),
               ]}

@@ -7,6 +7,7 @@ import { RUNNABLE_ENGINES, engineLabel, type RunnableEngineId } from '@/lib/engi
 import { useAuth } from '@/stores/auth'
 import { usePairingCodes } from '@/stores/pairing-codes'
 import { copyText } from '@/lib/clipboard'
+import { cloudUpsellEnabled } from '@/lib/cloud-upsell'
 
 /**
  * First-run gate for free-tier users: their agents run on their own machine
@@ -176,9 +177,11 @@ export function Onboarding() {
             </section>
           )}
 
-          <p className="text-[12px] text-ink-400 mt-4">
-            {t('onboard.cloudCta')} <span className="text-skype-deep">{t('onboard.upgradePro')}</span> {t('onboard.cloudRun')}
-          </p>
+          {cloudUpsellEnabled() && (
+            <p className="text-[12px] text-ink-400 mt-4">
+              {t('onboard.cloudCta')} <span className="text-skype-deep">{t('onboard.upgradePro')}</span> {t('onboard.cloudRun')}
+            </p>
+          )}
         </div>
       </main>
     </div>
