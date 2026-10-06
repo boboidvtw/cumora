@@ -1,12 +1,14 @@
 #!/bin/sh
-# Back up self-hosted Cumora: the Postgres database and the uploads volume.
+# Back up self-hosted Cumora: the Postgres database, the uploads volume and .env.
 #
 #   ./backup.sh               # take one backup now
 #   ./backup.sh --install     # run it every day at 03:30 (launchd)
 #   ./backup.sh --uninstall   # stop the daily run (backups already taken stay)
 #
-# Each backup is a folder <dir>/cumora-YYYYMMDD-HHMMSS with db.sql.gz and
-# uploads.tar.gz. It is written under a temporary name and renamed only once
+# Each backup is a folder <dir>/cumora-YYYYMMDD-HHMMSS with db.sql.gz,
+# uploads.tar.gz and env (a copy of .env). .env holds the two secrets that are
+# already baked into the data (POSTGRES_PASSWORD, AGENT_RUNTIME_SECRET) and
+# cannot be regenerated, so the folder is private to this user. It is written under a temporary name and renamed only once
 # both files check out, so a half-written backup never counts as one.
 #
 #   CUMORA_BACKUP_DIR    where backups go (default ~/.cumora/backups)
@@ -80,7 +82,7 @@ mkdir -p "$dest"
 name="cumora-$(date +%Y%m%d-%H%M%S)"
 tmp="$dest/.$name.partial"
 rm -rf "$tmp"
-mkdir "$tmp"
+mkdir -m 700 "$tmp"
 trap 'rm -rf "$tmp"' EXIT
 
 # --clean --if-exists makes the dump restorable over an existing database.
@@ -97,6 +99,9 @@ docker run --rm -v cumora_uploads:/data:ro --entrypoint tar pgvector/pgvector:pg
   || fail "上傳檔案備份失敗"
 
 gzip -t "$tmp/db.sql.gz" && gzip -t "$tmp/uploads.tar.gz" || fail "壓縮檔驗證失敗"
+
+[ -s .env ] || fail ".env 不見了；先從最近一份備份的 env 還原（見 README「還原」）"
+(umask 077 && cp .env "$tmp/env") || fail ".env 備份失敗"
 
 mv "$tmp" "$dest/$name"
 trap - EXIT

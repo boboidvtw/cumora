@@ -102,10 +102,17 @@ docker compose start              # 再啟動
 ./backup.sh --uninstall    # 取消自動備份（已做好的備份會留著）
 ```
 
-每份備份是 `~/.cumora/backups/cumora-<日期時間>/` 底下的兩個檔案：資料庫 `db.sql.gz` 和上傳檔案 `uploads.tar.gz`。預設保留最近 14 份，日誌在 `~/.cumora/backup.log`。Redis 不備份，裡面只有佇列和暫存狀態，伺服器會自己重建。
+每份備份是 `~/.cumora/backups/cumora-<日期時間>/` 底下的三個檔案：資料庫 `db.sql.gz`、上傳檔案 `uploads.tar.gz`，和 `.env` 的副本 `env`。預設保留最近 14 份，日誌在 `~/.cumora/backup.log`。Redis 不備份，裡面只有佇列和暫存狀態，伺服器會自己重建。
 
 - 換位置：`CUMORA_BACKUP_DIR=/Volumes/外接碟/cumora ./backup.sh --install`。預設位置和資料在同一顆硬碟上，防得了誤刪、防不了硬碟壞掉；放到外接碟或雲端同步資料夾比較保險。
 - 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。
+- `env` 裡有密鑰（資料庫密碼、`AGENT_RUNTIME_SECRET`、GitHub OAuth secret），所以備份資料夾只有你自己能讀。要放到雲端同步資料夾的話，記得這點。
+
+**`.env` 不見了**：資料庫密碼和 `AGENT_RUNTIME_SECRET` 已經寫進資料裡，不能重新產生；不要直接跑 `./up.sh`（它會建一份新的 `.env`、產生新密鑰）。先從最近一份備份拿回來：
+
+```bash
+install -m 600 ~/.cumora/backups/cumora-<日期時間>/env .env
+```
 
 **還原**（會覆蓋目前的資料，先停伺服器）：
 
