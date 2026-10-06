@@ -4,14 +4,30 @@
 # through an editor or a chat transcript. Run ./up.sh afterwards.
 set -eu
 cd "$(dirname "$0")"
-[ -f .env ] || cp .env.example .env
+if [ ! -f .env ]; then
+  # Same guard as up.sh: a fresh .env over an existing database would get new
+  # secrets on the next ./up.sh and lock the database and paired computers out.
+  if docker volume inspect cumora_pgdata >/dev/null 2>&1; then
+    echo "找不到 .env，但資料庫已經存在。先跑 ./restore.sh 從備份放回 .env，再設定 GitHub 登入。" >&2
+    exit 1
+  fi
+  cp .env.example .env
+fi
+current_admins=$(sed -n 's/^CUMORA_ADMIN_EMAILS=//p' .env)
 
 printf 'GitHub OAuth App Client ID: '
 read -r client_id
 printf 'GitHub OAuth App Client secret（輸入時不會顯示）: '
+# Turn echo back on even if the prompt is interrupted with Ctrl-C.
+trap 'stty echo 2>/dev/null || true' EXIT INT TERM
 stty -echo 2>/dev/null || true; read -r client_secret; stty echo 2>/dev/null || true; echo
-printf '管理員 email（你 GitHub 帳號的 email）: '
+if [ -n "$current_admins" ]; then
+  printf '管理員 email（直接按 Enter 保留 %s）: ' "$current_admins"
+else
+  printf '管理員 email（你 GitHub 帳號的 email）: '
+fi
 read -r admin_emails
+admin_emails=${admin_emails:-$current_admins}
 
 if [ -z "$client_id" ] || [ -z "$client_secret" ]; then
   echo "Client ID 和 secret 都要填。" >&2

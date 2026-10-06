@@ -25,7 +25,19 @@ code=$(docker compose exec -T server node_modules/.bin/tsx server/src/local-logi
 case "$code" in
   ''|*[!A-Za-z0-9_-]*) echo "配對失敗：沒有拿到配對碼（先執行 ./login.sh 建立帳號）。" >&2; exit 1 ;;
 esac
+# With this repo's daemon installed (./install-local-daemon.sh), the npm
+# service that --install-service sets up would host the same agents next to
+# it. Stop the local one while pairing, then hand back to it; its plist stays
+# on disk, so the reinstall keeps Hermes and the read paths.
+local_plist="$HOME/Library/LaunchAgents/io.cumora.daemon.local.plist"
+[ -f "$local_plist" ] && launchctl unload "$local_plist" 2>/dev/null || true
+
 # One invocation: pair (saves ~/.cumora/computer.json), then hand off to the
 # launchd supervisor and return instead of running in the foreground.
 npx -y cumora@latest agent computer --pair "$code" --server "$origin" --engine "$engine" --install-service
-echo "這台 Mac 已配對，常駐程式已註冊為背景服務（日誌：~/.cumora/daemon.log）。"
+if [ -f "$local_plist" ]; then
+  ./install-local-daemon.sh
+  echo "這台 Mac 已重新配對，繼續用這個 repo 建的常駐程式（日誌：~/.cumora/daemon.log）。"
+else
+  echo "這台 Mac 已配對，常駐程式已註冊為背景服務（日誌：~/.cumora/daemon.log）。"
+fi

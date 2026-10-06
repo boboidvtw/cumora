@@ -37,6 +37,8 @@ cd deploy/orbstack
 
 它會把這台 Mac 配對成你工作區的「電腦」，並把常駐程式註冊成 launchd 服務（開機自動啟動、當掉自動重啟、自動更新）。配對後，初始團隊（Atlas、Bram、Iris、Nova）會部署到這台 Mac，用 Claude Code 回覆。日誌在 `~/.cumora/daemon.log`。
 
+已經換成這個 repo 建的常駐程式（見下方「讓智能體讀你的專案」）之後，要重新配對也是跑 `./pair.sh`：它會先停掉自建的常駐程式、配對完再換回來，設定照舊，不會變成兩個常駐程式同時跑。
+
 ### （選用）GitHub 登入
 
 想讓別人從別台電腦登入，或邀請同事，才需要 GitHub OAuth。到 <https://github.com/settings/applications/new> 建立 OAuth App：

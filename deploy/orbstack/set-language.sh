@@ -16,4 +16,8 @@ fi
 
 set -- set-language --email "$email" ${2:+--language "$2"}
 docker compose exec -T server node_modules/.bin/tsx server/src/local-login-bin.ts "$@" >/dev/null
-echo "已更新人設語言。執行 npx cumora@latest agent computer --restart 讓它立即生效。"
+if [ -f "$HOME/Library/LaunchAgents/io.cumora.daemon.local.plist" ]; then
+  echo "已更新人設語言。讓它立即生效：launchctl kickstart -k gui/$(id -u)/io.cumora.daemon.local"
+else
+  echo "已更新人設語言。執行 npx cumora@latest agent computer --restart 讓它立即生效。"
+fi
