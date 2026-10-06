@@ -45,7 +45,7 @@ done
 
 export DATABASE_URL="postgres://cumora:cumora-test@127.0.0.1:$pg_port/cumora"
 export REDIS_URL="redis://127.0.0.1:$redis_port"
-export OPENAI_API_KEY=${OPENAI_API_KEY:-sk-test}
+export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-test}"
 # Node 26 warns that tsx's module.register() is deprecated (DEP0205) on every
 # start. The schema verifier treats any stderr line as unreadable output, so
 # that warning alone fails deployment-schema-recovery. CI runs Node 24, which
