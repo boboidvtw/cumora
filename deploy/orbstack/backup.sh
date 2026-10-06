@@ -74,6 +74,25 @@ esac
 
 stamp() { date '+%Y-%m-%d %H:%M:%S'; }
 fail() { echo "$(stamp) 備份失敗：$*" >&2; exit 1; }
+notify() {
+  # Title and body are fixed text, so no quoting surprises.
+  osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
+}
+
+# A backup dir on an external drive (/Volumes/<name>/...) only exists while the
+# drive is mounted. Without it, back up to the internal disk rather than skip
+# the day. An unmounted /Volumes/<name> is either missing or a plain folder on
+# the boot volume, so compare devices instead of parsing mount output.
+case "$dest" in
+  /Volumes/*)
+    vol="/Volumes/$(printf '%s' "${dest#/Volumes/}" | cut -d/ -f1)"
+    if [ ! -d "$vol" ] || [ "$(stat -f %d "$vol")" = "$(stat -f %d /)" ]; then
+      echo "$(stamp) 警告：$vol 沒有掛載，這次先備份到 $HOME/.cumora/backups" >&2
+      notify "Cumora 備份" "外接碟沒接上，這次先備份到內建磁碟。"
+      dest="$HOME/.cumora/backups"
+    fi
+    ;;
+esac
 
 docker info >/dev/null 2>&1 || fail "Docker 沒有回應（OrbStack 沒開？）"
 [ -n "$(docker compose ps -q postgres 2>/dev/null)" ] || fail "Cumora 的 postgres 沒在執行（先跑 ./up.sh）"
