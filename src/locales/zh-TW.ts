@@ -58,7 +58,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'nav.boards': '看板',
   'nav.calendar': '日曆',
   'nav.docs': '文件',
-  'nav.library': '資料庫',
+  'nav.library': '資料夾',
   'nav.agents': '智能體',
   'nav.me': '我',
   'nav.observe': '觀測',
@@ -82,7 +82,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'auth.clearOverride': '清除覆蓋（使用建置時的預設值）',
   // ─── 「我」與設定（桌面端）────────────────────────────────────────
   'me.headline': '你',
-  'me.statPulled': '拉群',
+  'me.statPulled': '拉進群組',
   'me.statLed': '主導',
   'me.statNoise': '雜訊',
   'me.subtitle': '你的智能體如何看你、記得什麼，以及你給它們多大的自由度。',
@@ -1276,9 +1276,9 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'me.resetsInHours': '{n} 小時後重設',
   'me.resetsInDays': '{n} 天後重設',
   'me.sectionPerAgent': '↳ 按智能體的自主權',
-  'me.perAgentIntro': '每位智能體都有一個自主行動的閾值 —— 是否拉群、呼叫工具、跟同事私訊。如果判斷跟你不一致，可以單獨調整。',
+  'me.perAgentIntro': '每位智能體都有一個自主行動的閾值 —— 是否拉人進群組、呼叫工具、跟同事私訊。如果判斷跟你不一致，可以單獨調整。',
   'me.autonomyThreshold': '自主權閾值',
-  'me.sectionTrackRecords': '↳ 拉群戰績',
+  'me.sectionTrackRecords': '↳ 拉進群組戰績',
   'me.sectionProjects': '↳ 專案',
   'me.projectsIntro': '專案用一個名字 + 一種色把相關的群組打包在一起。把群組掛到專案上，團隊和智能體都能看到這個對話屬於哪個範圍。',
   'me.noProjects': '還沒有專案。點 + 新增專案開始。',
@@ -1910,7 +1910,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'msgview.typingAre': ' 正在輸入…',
   'msgview.typingSep': '、',
   'msgview.nMore': '{n} 位其他人',
-  // ─── 行動裝置資料庫 ─────────────────────────────────────────────────────
+  // ─── 行動裝置資料夾 ─────────────────────────────────────────────────────
   'moblib.tabDocuments': '文件',
   'moblib.tabBoards': '看板',
   'moblib.tabCalendar': '日曆',
