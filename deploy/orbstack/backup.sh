@@ -73,10 +73,18 @@ PLIST
 esac
 
 stamp() { date '+%Y-%m-%d %H:%M:%S'; }
-fail() { echo "$(stamp) 備份失敗：$*" >&2; exit 1; }
+# A failed nightly run would otherwise only reach backup.log, so say it out
+# loud: OrbStack left closed means no backups, night after night, unnoticed.
+fail() {
+  echo "$(stamp) 備份失敗：$*" >&2
+  notify "Cumora 備份失敗" "$*。詳情：~/.cumora/backup.log"
+  exit 1
+}
 notify() {
-  # Title and body are fixed text, so no quoting surprises.
-  osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
+  # Drop quotes and backslashes so a reason can never break the AppleScript.
+  t=$(printf '%s' "$1" | tr -d '"\\')
+  b=$(printf '%s' "$2" | tr -d '"\\')
+  osascript -e "display notification \"$b\" with title \"$t\"" >/dev/null 2>&1 || true
 }
 
 # A backup dir on an external drive (/Volumes/<name>/...) only exists while the

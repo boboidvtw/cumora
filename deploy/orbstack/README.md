@@ -124,7 +124,7 @@ docker compose start              # 再啟動
 ./backup.sh --uninstall    # 取消自動備份（已做好的備份會留著）
 ```
 
-每份備份是 `~/.cumora/backups/cumora-<日期時間>/` 底下的三個檔案：資料庫 `db.sql.gz`、上傳檔案 `uploads.tar.gz`，和 `.env` 的副本 `env`。預設保留最近 14 份，日誌在 `~/.cumora/backup.log`。Redis 不備份，裡面只有佇列和暫存狀態，伺服器會自己重建。
+每份備份是 `~/.cumora/backups/cumora-<日期時間>/` 底下的三個檔案：資料庫 `db.sql.gz`、上傳檔案 `uploads.tar.gz`，和 `.env` 的副本 `env`。預設保留最近 14 份，日誌在 `~/.cumora/backup.log`。備份失敗（例如 OrbStack 沒開）時會跳 macOS 通知，不會只默默寫進日誌。Redis 不備份，裡面只有佇列和暫存狀態，伺服器會自己重建。
 
 - 換位置：`CUMORA_BACKUP_DIR=/Volumes/外接碟/cumora ./backup.sh --install`。預設位置和資料在同一顆硬碟上，防得了誤刪、防不了硬碟壞掉；放到外接碟或雲端同步資料夾比較保險。外接碟在備份時沒接上的話，那次會先備份到 `~/.cumora/backups`，並跳出通知，不會整天沒備份。
 - 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。
