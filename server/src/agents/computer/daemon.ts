@@ -1828,7 +1828,7 @@ export class AgentRunner {
   /** Aborts the current wake-stream fetch, so a stream that has gone silent can
    *  be torn down and reconnected instead of waiting for TCP to notice. */
   private streamAbort: AbortController | null = null
-  /** When snapshotUnread last hit /inbox — the anchor for the slow double-check. */
+  /** Last successful inbox check; 0 means a retry is due. */
   private lastInboxDrainAt = 0
   /** The last status POST that succeeded, and when — see AVAIL_REASSERT_MS. */
   private lastPostedStatus: string | null = null
@@ -2549,8 +2549,9 @@ export class AgentRunner {
   }
 
   private async snapshotUnread(token: string): Promise<{ seen: Map<string, string>; digest: string; hasReal: boolean; projectIds: string[] }> {
-    this.lastInboxDrainAt = Date.now()
     const inbox = await runtimeGet<RuntimeInboxResponse>(this.cfg.serverUrl, '/inbox', token)
+    this.lastInboxDrainAt = inbox ? Date.now() : 0
+    if (!inbox) throw new Error('inbox fetch failed')
     const seen = new Map<string, string>()
     // Unread grouped BY CONVERSATION (first-seen order), each with the header
     // (title + topic) the cloud agent's context also carries — so a BYOA agent
