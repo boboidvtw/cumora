@@ -8,6 +8,7 @@
 
 - OrbStack（Docker 要能用）
 - Claude Code ≥ 2.1.248（或 Codex ≥ 0.138.0），並且已經登入
+- （選用）LM Studio：Hermes 智能體的模型，和頭像判斷性別外觀都用它（`lms server start`，模型 `qwen3.8-27b`）。沒開的話這兩項會受影響，其他照常。
 
 ## 第一次安裝
 
@@ -67,9 +68,28 @@ CUMORA_AGENT_READ_PATHS=~/code ./install-local-daemon.sh
 
 - **只能讀，不能寫。** 沙箱仍然把寫入限制在智能體自己的家目錄，實測在 `~/Projects` 下建檔會失敗。
 - **機密檔案一律擋掉。** `.env`、`*.pem`、`*.key`、`id_rsa*`、`.ssh/`、`.aws/`、`.npmrc` 這類檔案就算在開放目錄裡也讀不到（`engine.ts` 的 `SECRET_FILE_GLOBS`）。注意規則必須寫成 `//**/.env` 這種雙斜線形式，單斜線只比對工作目錄，模型用絕對路徑就會繞過。
-- **代價：不再自動更新。** 同步上游之後要重跑一次 `./install-local-daemon.sh`。
+- **代價：不再自動更新。** 同步上游之後要重跑一次 `./install-local-daemon.sh`。重跑會沿用上次的設定：Hermes 的開關、可讀目錄、Hermes 的模型等設定都會保留，不用再帶一次參數。
 
 官方 npm 版常駐程式沒有這個設定，它唯一的放寬開關是 `CUMORA_BYOA_ALLOW_UNSANDBOXED=1`，那會整個關掉沙箱（模型可讀全機檔案、可連網），不建議用。
+
+## Hermes 智能體
+
+除了 Claude Code 和 Codex，這個分支多了一種引擎：[Hermes Agent](hermes/README.md)，跑在容器裡、模型用宿主上的 LM Studio，不需要任何雲端訂閱。只有這個 repo 建的常駐程式能跑它。
+
+```bash
+./install-local-daemon.sh --hermes      # 開啟（之後重跑會保留）
+./install-local-daemon.sh --no-hermes   # 關掉
+```
+
+開啟後，建立智能體時選「引擎 = Hermes」即可。Hermes 只看得到它自己的家目錄和自己的資料卷，碰不到 Mac 上的其他檔案；Claude 和 Codex 的沙箱不受影響。
+
+換模型或映像，就在安裝時帶上設定，之後重跑會記住；設成空值（例如 `CUMORA_HERMES_MODEL=`）就清掉、回到預設：
+
+```bash
+CUMORA_HERMES_MODEL=qwen3.8-27b ./install-local-daemon.sh
+```
+
+可用的設定有 `CUMORA_HERMES_MODEL`、`CUMORA_HERMES_IMAGE`、`CUMORA_HERMES_BASE_URL`、`CUMORA_HERMES_CONTEXT`、`CUMORA_HERMES_REASONING`、`CUMORA_HERMES_MIGRATE`，說明見 [hermes/README.md](hermes/README.md)。
 
 ## 日常操作
 
@@ -130,9 +150,12 @@ docker compose start server
 ### 同步上游更新
 
 ```bash
-git fetch https://github.com/yetone/cumora main
-git merge FETCH_HEAD        # 在 zh-tw 分支上
+git fetch https://github.com/yetone/cumora main:refs/upstream/main
+git merge refs/upstream/main     # 在 zh-tw 分支上
+./test.sh --integration          # 先確認測試都過
 ./up.sh
+git diff --stat ORIG_HEAD -- server/src/agents/computer   # 有列出檔案，就再跑下一行
+./install-local-daemon.sh        # 常駐程式有改才需要；設定會沿用
 ```
 
 每週自動檢查有沒有新的上游 commit：
@@ -161,7 +184,7 @@ npm run i18n:scan
 - 註冊是開放的。只要能打開這個網址的人，都能用 GitHub 登入並建立自己的工作區。目前只綁 localhost，所以只有這台 Mac 能連。如果要開放到區網或外網，請先到 `/admin → 設定` 開啟候補名單（waitlist）。
 - 自架版本沒有 Cumora Cloud，所以「升級到 Pro」的入口（智能體設定的「執行位置」選單、初次設定頁底部）預設會藏起來。要顯示它們，就在 `.env` 加上 `CUMORA_HIDE_CLOUD_UPSELL=0`，再跑一次 `./up.sh`。
 - `OPENAI_API_KEY` 目前是佔位值。走伺服器端 OpenAI 的功能會失敗，但不影響聊天和 BYOA 智能體。頭像不受影響，見下方「頭像」。
-- 常駐程式用的是 npm 上的 `cumora` 套件（`cumora@latest`，會自動更新）。它自己帶一份上游的提示詞規則，所以這個分支加的「繁中進、繁中出」規則傳不到它；智能體會回簡體字。用下面的指令把語言釘在人設上，走的是伺服器這端，對兩種常駐程式都有效：
+- 如果用的是 npm 上的官方常駐程式（`./pair.sh` 裝的那個，`cumora@latest`），它自己帶一份上游的提示詞規則，這個分支加的「繁中進、繁中出」規則傳不到它。伺服器仍會把簡體字轉成繁體（見下方「簡體字自動轉繁體」），但建議再用下面的指令把語言釘在人設上，讓模型一開始就用繁中寫；走的是伺服器這端，對兩種常駐程式都有效：
 
 ```bash
 ./set-language.sh                       # 預設：繁體中文、台灣用語

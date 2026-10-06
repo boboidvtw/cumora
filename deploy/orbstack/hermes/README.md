@@ -42,7 +42,7 @@ cd deploy/orbstack
 - `CUMORA_BYOA_ALLOW_UNSANDBOXED=hermes`：**只**解除 Hermes 的沙箱要求，Claude 與 Codex 維持沙箱與版本檢查。
 - `CUMORA_HERMES_ACP_BIN=<這個資料夾>/hermes-acp-container`：常駐程式只透過這支腳本啟動 Hermes。宿主上的 `hermes` 指令**不會**讓引擎被視為「已安裝」，也永遠不會被直接執行。
 
-接著在 App 建立智能體時選「引擎 = Hermes」。
+接著在 App 建立智能體時選「引擎 = Hermes」。之後重跑 `./install-local-daemon.sh`（例如同步上游後）不用再帶 `--hermes`，會沿用；要關掉用 `--no-hermes`。
 
 ## 工具授權
 
@@ -99,4 +99,4 @@ Hermes 執行工具前會送 ACP `session/request_permission`。常駐程式的�
 ## 前置需求
 
 - LM Studio 的伺服器要開著：`lms server start`（模型 `qwen3.8-27b`）。
-- 換模型：改 `CUMORA_HERMES_MODEL`，並刪掉該智能體的資料卷讓設定重新產生，或直接改卷裡的 `config.yaml`。
+- 換模型：`CUMORA_HERMES_MODEL=<模型> ../install-local-daemon.sh`（要寫進 launchd 設定才有效，只在 shell 裡 export 沒用），並刪掉該智能體的資料卷讓設定重新產生，或直接改卷裡的 `config.yaml`。其他 `CUMORA_HERMES_*` 設定也一樣用安裝時帶入的方式。

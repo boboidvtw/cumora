@@ -18,6 +18,12 @@
 #   CUMORA_AGENT_READ_PATHS=~/code ./install-local-daemon.sh
 #   ./install-local-daemon.sh --uninstall          # back to the npm daemon
 #   ./install-local-daemon.sh --hermes             # also run Hermes agents (in containers)
+#   ./install-local-daemon.sh --no-hermes          # stop running Hermes agents
+#
+# A re-run keeps what the installed service already had: Hermes stays on and
+# the read paths stay the same unless you pass --no-hermes or set
+# CUMORA_AGENT_READ_PATHS. (Before, a bare re-run after an upstream sync
+# quietly switched Hermes off and reset the read paths to ~/Projects.)
 set -eu
 cd "$(dirname "$0")"
 repo=$(cd ../.. && pwd)
@@ -31,18 +37,44 @@ if [ "${1:-}" = "--uninstall" ]; then
   exit 0
 fi
 
-read_paths=${CUMORA_AGENT_READ_PATHS:-$HOME/Projects}
+# What the currently installed service was started with, if anything.
+installed() {
+  [ -f "$plist" ] && /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$1" "$plist" 2>/dev/null || true
+}
+
+read_paths=${CUMORA_AGENT_READ_PATHS:-$(installed CUMORA_AGENT_READ_PATHS)}
+read_paths=${read_paths:-$HOME/Projects}
 version=$(node -p "require('$repo/package.json').version")
 
 # --hermes: let this daemon drive the Hermes engine through its container
 # wrapper. Only Hermes is exempted from the sandbox requirement; Claude and
 # Codex agents keep theirs.
+case "${1:-}" in
+  --hermes) want_hermes=1 ;;
+  --no-hermes) want_hermes=0 ;;
+  '') if [ -n "$(installed CUMORA_HERMES_ACP_BIN)" ]; then want_hermes=1; else want_hermes=0; fi ;;
+  *) echo "用法：./install-local-daemon.sh [--hermes | --no-hermes | --uninstall]" >&2; exit 64 ;;
+esac
 hermes_env=
-if [ "${1:-}" = "--hermes" ]; then
+if [ "$want_hermes" = 1 ]; then
   hermes_bin="$(pwd)/hermes/hermes-acp-container"
   command -v docker >/dev/null 2>&1 || { echo "找不到 docker，Hermes 需要 OrbStack / Docker" >&2; exit 1; }
   hermes_env="    <key>CUMORA_BYOA_ALLOW_UNSANDBOXED</key><string>hermes</string>
     <key>CUMORA_HERMES_ACP_BIN</key><string>$hermes_bin</string>"
+  # hermes-acp-container's own knobs (model, image, …). launchd starts the
+  # daemon with only the env written here, and the daemon hands its env to
+  # the container script — so a knob set in the shell, or kept from the
+  # installed service, has to be written into the plist to take effect.
+  hermes_knobs=
+  for knob in IMAGE MODEL BASE_URL CONTEXT REASONING MIGRATE; do
+    name=CUMORA_HERMES_$knob
+    value=$(printenv "$name" || installed "$name")
+    [ -n "$value" ] || continue
+    case "$value" in *[\<\>\&]*) echo "$name 不能含 < > &" >&2; exit 64 ;; esac
+    hermes_env="$hermes_env
+    <key>$name</key><string>$value</string>"
+    hermes_knobs="$hermes_knobs $name=$value"
+  done
 fi
 origin=$(sed -n 's/^CUMORA_PUBLIC_ORIGIN=//p' .env)
 origin=${origin:-http://localhost:5181}
@@ -96,5 +128,10 @@ launchctl unload "$plist" 2>/dev/null || true
 launchctl load "$plist"
 echo "自建常駐程式已啟動（來源：$repo）。"
 echo "智能體可讀目錄：$read_paths"
-[ -n "$hermes_env" ] && echo "Hermes 引擎：已啟用（容器執行，模型走宿主 LM Studio）"
+if [ -n "$hermes_env" ]; then
+  echo "Hermes 引擎：已啟用（容器執行，模型走宿主 LM Studio）；關掉：./install-local-daemon.sh --no-hermes"
+  [ -n "$hermes_knobs" ] && echo "Hermes 設定：$hermes_knobs"
+else
+  echo "Hermes 引擎：未啟用；要開：./install-local-daemon.sh --hermes"
+fi
 echo "日誌：~/.cumora/daemon.log"
