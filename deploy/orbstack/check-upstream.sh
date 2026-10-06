@@ -10,6 +10,10 @@
 # and FETCH_HEAD are left alone. A notification is sent only when upstream
 # has commits that an earlier check hasn't already reported; the full list
 # goes to ~/.cumora/upstream-check.log every time.
+#
+# It also warns when the newest backup is CUMORA_BACKUP_MAX_AGE_DAYS (default
+# 3) days old or more — the one failure backup.sh can't report itself: the
+# daily job not running at all.
 set -eu
 cd "$(dirname "$0")"
 here=$(pwd)
@@ -70,6 +74,30 @@ notify() {
   # Title and body are fixed text plus numbers, so no quoting surprises.
   osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
 }
+
+# While we're up anyway: a backup job that stopped running altogether (unloaded,
+# Mac off for days) reports no failure, so check that the newest backup is
+# recent. Only when the daily backup is installed; runs before the fetch so a
+# network failure can't skip it.
+backup_plist="$HOME/Library/LaunchAgents/ai.cumora.backup.plist"
+if [ -f "$backup_plist" ]; then
+  backup_dir=$(/usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:CUMORA_BACKUP_DIR" "$backup_plist" 2>/dev/null || true)
+  newest=$(for d in "${backup_dir:-$HOME/.cumora/backups}" "$HOME/.cumora/backups"; do
+    for b in "$d"/cumora-*; do [ -f "$b/db.sql.gz" ] && basename "$b"; done
+  done | sort | tail -n 1)
+  max_days=${CUMORA_BACKUP_MAX_AGE_DAYS:-3}
+  if [ -z "$newest" ]; then
+    echo "$(stamp) 警告：找不到任何備份" >&2
+    notify "Cumora 沒有備份" "找不到任何備份。跑一次 ./backup.sh 看看"
+  else
+    taken=$(date -j -f %Y%m%d-%H%M%S "${newest#cumora-}" +%s 2>/dev/null || echo 0)
+    age_days=$(( ($(date +%s) - taken) / 86400 ))
+    if [ "$age_days" -ge "$max_days" ]; then
+      echo "$(stamp) 警告：最新的備份是 $age_days 天前（$newest）" >&2
+      notify "Cumora 備份太久沒更新" "最新的備份是 $age_days 天前。每日備份可能沒在跑，詳情：~/.cumora/backup.log"
+    fi
+  fi
+fi
 
 git -C "$repo" fetch --quiet "$upstream_url" "+main:refs/upstream/main" \
   || { echo "$(stamp) 檢查失敗：抓不到 $upstream_url（網路？）" >&2; exit 1; }
