@@ -148,9 +148,11 @@ function MobileRow({ c, onTap, onLongPress }: {
       {...press}
       onClick={(e) => {
         // Touch path uses onTap from useLongPress. This `onClick` is
-        // the mouse / external-keyboard fallback (Vite dev, iPad +
-        // trackpad). Suppress when a long-press already fired.
+        // the mouse / external-keyboard fallback (narrow desktop window,
+        // iPad + trackpad); press.onClick skips the click a finger's tap
+        // synthesizes and any click after a drag.
         e.preventDefault()
+        press.onClick(e)
       }}
       // Subtle press-in scale: rows are large so 0.985 reads as a
       // gentle press without making the surrounding rows look
@@ -251,7 +253,7 @@ function PinnedTile({ c, onSelect, onLongPress }: {
   return (
     <motion.button
       {...press}
-      onClick={(e) => e.preventDefault()}
+      onClick={(e) => { e.preventDefault(); press.onClick(e) }}
       whileTap={{ scale: 0.92 }}
       transition={{ type: 'spring', stiffness: 600, damping: 30, mass: 0.5 }}
       className="flex flex-col items-center gap-0.5 w-[52px] shrink-0"
