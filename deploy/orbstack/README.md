@@ -128,23 +128,19 @@ docker compose start              # 再啟動
 - 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。
 - `env` 裡有密鑰（資料庫密碼、`AGENT_RUNTIME_SECRET`、GitHub OAuth secret），所以備份資料夾只有你自己能讀。要放到雲端同步資料夾的話，記得這點。
 
-**`.env` 不見了**：資料庫密碼和 `AGENT_RUNTIME_SECRET` 已經寫進資料裡，不能重新產生；不要直接跑 `./up.sh`（它會建一份新的 `.env`、產生新密鑰）。先從最近一份備份拿回來：
+**還原**：
 
 ```bash
-install -m 600 ~/.cumora/backups/cumora-<日期時間>/env .env
+./restore.sh --list                         # 看有哪些備份
+./restore.sh                                # 還原最新的一份
+./restore.sh ~/Downloads/cumora-backups/cumora-<日期時間>   # 還原指定的一份
 ```
 
-**還原**（會覆蓋目前的資料，先停伺服器）：
+它會先問你，要輸入 `restore` 才會動手。動手前會把目前的狀態另外備份到 `~/.cumora/pre-restore`（保留 5 份，跟每日備份分開，所以不會被它的保留份數刪掉），還原完會印出「回到還原前」的指令；還原錯了，照著跑就能回去。接著停伺服器、換掉資料庫和上傳檔案（上傳檔案會先清空，結果跟備份一模一樣），再啟動伺服器並等它恢復正常。
 
-```bash
-docker compose stop server
-gunzip -c ~/.cumora/backups/cumora-<日期時間>/db.sql.gz \
-  | docker compose exec -T postgres psql -U cumora -d cumora -v ON_ERROR_STOP=1
-docker run --rm -i -v cumora_uploads:/data --entrypoint sh pgvector/pgvector:pg16 \
-  -c 'find /data -mindepth 1 -delete && tar -C /data -xzf -' \
-  < ~/.cumora/backups/cumora-<日期時間>/uploads.tar.gz
-docker compose start server
-```
+它會在每日備份寫入的位置找備份（`./backup.sh --install` 設定的 `CUMORA_BACKUP_DIR`），也會找 `~/.cumora/backups`（外接碟沒接上時的備份落在這裡）。
+
+**`.env` 不見了**：資料庫密碼和 `AGENT_RUNTIME_SECRET` 已經寫進資料裡，不能重新產生，`./up.sh` 也會拒絕產生新的。直接跑 `./restore.sh`：`.env` 不在時，它會先從備份放回來（就算你在確認時取消，`.env` 也已經回來了）。`.env` 還在的話會保留目前的，只在跟備份不同時提醒是哪幾個鍵。
 
 資料存在 `cumora_pgdata`、`cumora_redisdata` 和 `cumora_uploads` 三個 Docker volume。`docker compose down` 不會刪資料；**`docker compose down -v` 會全部刪掉**。
 

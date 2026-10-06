@@ -14,7 +14,7 @@ if [ ! -f .env ]; then
   # computers the old AGENT_RUNTIME_SECRET; fresh secrets would lock both out.
   if docker volume inspect cumora_pgdata >/dev/null 2>&1; then
     echo "找不到 .env，但資料庫已經存在。重新產生的密鑰會連不上它，所以不建立新的 .env。" >&2
-    echo "請先從備份還原：install -m 600 ~/.cumora/backups/cumora-<日期時間>/env .env" >&2
+    echo "請先跑 ./restore.sh：它會從最新的備份放回 .env（之後確認時取消，就只還原 .env）。" >&2
     exit 1
   fi
   cp .env.example .env

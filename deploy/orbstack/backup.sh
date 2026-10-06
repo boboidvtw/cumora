@@ -113,13 +113,13 @@ gzip "$tmp/db.sql"
 
 # Read the volume through a throwaway container so this works with the
 # server stopped; the postgres image is already on this machine.
-docker run --rm -v cumora_uploads:/data:ro --entrypoint tar pgvector/pgvector:pg16 \
+docker run --rm -v "${COMPOSE_PROJECT_NAME:-cumora}_uploads:/data:ro" --entrypoint tar pgvector/pgvector:pg16 \
   -C /data -czf - . > "$tmp/uploads.tar.gz" \
   || fail "上傳檔案備份失敗"
 
 gzip -t "$tmp/db.sql.gz" && gzip -t "$tmp/uploads.tar.gz" || fail "壓縮檔驗證失敗"
 
-[ -s .env ] || fail ".env 不見了；先從最近一份備份的 env 還原（見 README「還原」）"
+[ -s .env ] || fail ".env 不見了；先跑 ./restore.sh 從備份放回來"
 (umask 077 && cp .env "$tmp/env") || fail ".env 備份失敗"
 
 mv "$tmp" "$dest/$name"
