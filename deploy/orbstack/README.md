@@ -140,8 +140,9 @@ install -m 600 ~/.cumora/backups/cumora-<日期時間>/env .env
 docker compose stop server
 gunzip -c ~/.cumora/backups/cumora-<日期時間>/db.sql.gz \
   | docker compose exec -T postgres psql -U cumora -d cumora -v ON_ERROR_STOP=1
-docker run --rm -i -v cumora_uploads:/data --entrypoint tar pgvector/pgvector:pg16 \
-  -C /data -xzf - < ~/.cumora/backups/cumora-<日期時間>/uploads.tar.gz
+docker run --rm -i -v cumora_uploads:/data --entrypoint sh pgvector/pgvector:pg16 \
+  -c 'find /data -mindepth 1 -delete && tar -C /data -xzf -' \
+  < ~/.cumora/backups/cumora-<日期時間>/uploads.tar.gz
 docker compose start server
 ```
 

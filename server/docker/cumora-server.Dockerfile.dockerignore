@@ -21,6 +21,10 @@
 # Don't bake source maps / built assets / huge logs into the layer.
 server/**/*.log
 server/**/dist
+# Local upload storage — tests write fixtures here. Baked into the image, Docker
+# copies it into an empty uploads volume on first mount, so a fresh deployment
+# (or a restore onto one) started with stray test attachments.
+server/uploads
 # Local frontend build outputs — we always rebuild inside the image.
 dist
 node_modules
