@@ -24,7 +24,7 @@ cd deploy/orbstack
 ./login.sh
 ```
 
-它會用 `CUMORA_ADMIN_EMAILS` 的第一個 email 建立帳號和工作區，並在預設瀏覽器直接登入。登入網址帶有 session token，腳本會直接交給瀏覽器，不會印出來。
+它會用 `CUMORA_ADMIN_EMAILS` 的第一個 email 建立帳號和工作區，並在預設瀏覽器直接登入。登入網址帶有 session token，腳本會直接交給瀏覽器，不會印出來。新工作區預設叫「<顯示名稱> 的工作區」（顯示名稱沒給就用 email @ 前面那段），之後可以在工作區設定改名；用 GitHub 登入的新帳號也一樣。
 
 這個指令只能在這台 Mac 上執行，因為它要進得去伺服器容器，所以不是對外開放的後門。之後想再登入（例如 session 過期或換瀏覽器），重跑 `./login.sh` 就好。
 

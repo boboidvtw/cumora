@@ -23,6 +23,9 @@ x-server-env: &server-env
   # Convert any Simplified Chinese an agent posts to Traditional (Taiwan
   # wording); set to empty in .env to post exactly what the model wrote.
   AGENT_OUTPUT_SCRIPT: ${AGENT_OUTPUT_SCRIPT-zh-TW}
+  # Language for names the server writes into data (a new workspace is
+  # "<name> 的工作區"). Same knob as the UI's first-run locale.
+  DEFAULT_LOCALE: ${CUMORA_DEFAULT_LOCALE:-zh-TW}
   # No Kubernetes here: the pod, Chrome-profile volume and cluster-pressure
   # sweepers would only shell out to a kubectl with no cluster and log errors.
   ENABLE_AGENT_POD_GC: "false"

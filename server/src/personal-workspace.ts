@@ -44,6 +44,14 @@ export function workspaceSlugSeed(email: string): string {
   return (email.split('@')[0] || 'workspace').replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'workspace'
 }
 
+/** The name a new personal workspace starts with. `locale` is the
+ *  deployment's default UI locale (env.DEFAULT_LOCALE); a zh-TW deployment
+ *  names it in Chinese, anything else keeps the upstream English name. The
+ *  owner can rename it later — this is only the first value. */
+export function personalWorkspaceName(displayName: string, locale = ''): string {
+  return locale === 'zh-TW' ? `${displayName} 的工作區` : `${displayName}'s workspace`
+}
+
 /**
  * INSERT the personal workspace, retrying on slug collision. Returns the slug
  * that was actually taken. Must be called inside an open transaction.

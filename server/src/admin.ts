@@ -27,7 +27,7 @@ import { onboardStarterAgents, joinAllHands } from './onboardCompany.js'
 import { companyTier } from './tier.js'
 import { ensureCloudComputer, cloudComputerId } from './agents/computer/registry.js'
 import { mirrorAvatar } from './oauth.js'
-import { insertPersonalWorkspace } from './personal-workspace.js'
+import { insertPersonalWorkspace, personalWorkspaceName } from './personal-workspace.js'
 import { provisionUser as provisionSub2apiUser, sub2apiConfigured, setUserTier } from './sub2api.js'
 import { formatAddress, mintMessageId, sendViaProvider } from './email.js'
 
@@ -544,7 +544,7 @@ export async function approveWaitlist(waitlistId: string, decidedBy: string): Pr
       companyId = `co-${randomUUID().slice(0, 10)}`
       await insertPersonalWorkspace(client, {
         companyId,
-        name: `${row.display_name}'s workspace`,
+        name: personalWorkspaceName(row.display_name, env.DEFAULT_LOCALE),
         ownerUserId: userId,
         email: row.email,
       })

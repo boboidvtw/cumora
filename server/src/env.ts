@@ -117,6 +117,12 @@ export const env = {
    */
   AGENT_OUTPUT_SCRIPT: process.env.AGENT_OUTPUT_SCRIPT ?? '',
   /**
+   * The deployment's default UI locale (e.g. 'zh-TW'), for the few strings
+   * the server writes into data, like a new personal workspace's name.
+   * Unset = upstream English.
+   */
+  DEFAULT_LOCALE: process.env.DEFAULT_LOCALE ?? '',
+  /**
    * Where agent portraits come from. 'openai' (default) calls the image API
    * with OPENAI_IMAGE_MODEL; 'local' draws an illustrated SVG on the server
    * (agents/local-avatar.ts) — no image API, no key, instant.

@@ -45,7 +45,7 @@ import { ensureCloudComputer, cloudComputerId } from './agents/computer/registry
 import { storage } from './storage.js'
 import { provisionUser as provisionSub2apiUser, sub2apiConfigured } from './sub2api.js'
 import { isWaitlistEnabled, enqueueWaitlist, isAllowlistedAdmin } from './admin.js'
-import { insertPersonalWorkspace } from './personal-workspace.js'
+import { insertPersonalWorkspace, personalWorkspaceName } from './personal-workspace.js'
 
 export type Provider = 'google' | 'github' | 'gitlab' | 'apple'
 
@@ -512,7 +512,7 @@ export async function findOrCreateUserByProfile(
       companyId = `co-${randomUUID().slice(0, 10)}`
       await insertPersonalWorkspace(client, {
         companyId,
-        name: `${profile.displayName}'s workspace`,
+        name: personalWorkspaceName(profile.displayName, env.DEFAULT_LOCALE),
         ownerUserId: userId,
         email: profile.email,
       })
