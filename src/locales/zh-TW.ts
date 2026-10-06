@@ -7,7 +7,9 @@
  * out falls back to the English string rather than rendering empty.
  *
  * 翻譯原則（沿用 zh-CN）：
- *   - 產品名保留：Cumora / Convene / Skype / Whisper 這類專有名字保留原文。
+ *   - 產品名保留：Cumora / Convene / Skype 這類專有名字保留原文。
+ *   - Whisper（智能體之間、你只能旁觀的私下頻道）＝「私語」；DM（你跟智能體一對一）＝「私訊」。
+ *     兩個按鈕常並排出現，不能都叫私訊。
  *   - 不做機翻，同一句話怎麼用中文說最自然，就怎麼寫；口語、不用書面語。
  *   - 數字格式：中文沒有單複數變化，{count} 走單數即可。
  *   - 標點：能用全形就用全形（，。？「」），緊貼變數或 URL 時用半形。
@@ -55,7 +57,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   // ─── 導航 ─────────────────────────────────────────────────────────
   'nav.conversations': '對話',
   'nav.chats': '訊息',
-  'nav.whispers': '私訊',
+  'nav.whispers': '私語',
   'nav.ship': '交付',
   'nav.boards': '看板',
   'nav.calendar': '日曆',
@@ -98,8 +100,8 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'me.prefs.notifications': '通知',
   'me.prefs.groupPulled': '當智能體拉起一個有你在的群組',
   'me.prefs.groupPulledSub': '開啟後，在包含你的新群組建立時通知你',
-  'me.prefs.whisperMention': '當私訊裡提到你',
-  'me.prefs.whisperMentionSub': '開啟後，在私訊中提到你時通知你',
+  'me.prefs.whisperMention': '當私語裡提到你',
+  'me.prefs.whisperMentionSub': '開啟後，在私語中提到你時通知你',
   'me.prefs.conveneCalled': '當有人發起 Convene 會議',
   'me.prefs.conveneCalledSub': '開啟後，有人發起 Convene 會議時通知你',
   'me.prefs.dailySummary': '每日彙總：夜間的智能體動態',
@@ -110,9 +112,9 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'me.prefs.typingIndicators': '顯示正在輸入提示',
   'me.prefs.typingIndicatorsSub': '看到智能體正在打字',
   'me.prefs.thoughtsInMain': '在主聊天裡顯示「邊想邊說」的片段',
-  'me.prefs.thoughtsInMainSub': '通常只在私訊裡可見',
+  'me.prefs.thoughtsInMainSub': '通常只在私語裡可見',
   'me.prefs.privacy': '隱私',
-  'me.prefs.silentWhispers': '允許智能體在你不在場時私訊',
+  'me.prefs.silentWhispers': '允許智能體在你不在場時私語',
   'me.prefs.silentWhispersSub': '記錄仍會寫進你的對話存檔',
   'me.prefs.newTools': '允許智能體自主呼叫新工具',
   'me.prefs.newToolsSub': '在你已授予的權限範圍內',
@@ -237,7 +239,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'chat.failedToSend': '傳送失敗',
   'chat.dismiss': '忽略',
   'info.close': '關閉資訊面板',
-  'info.whisper': '私訊',
+  'info.whisper': '私語',
   'info.convene': 'Convene',
   'info.email': '郵件',
   'info.toolsEnabled': '已啟用的工具',
@@ -425,7 +427,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'agents.openingChat': '正在開啟…',
   'agents.rosterRefreshing': '正在更新團隊…',
   'agents.cardChat': '聊天',
-  'agents.cardWhisper': '私訊',
+  'agents.cardWhisper': '私語',
   'agents.addAgent': '新增一位智能體',
   'agents.addAgentSub': '給它一個 id、一個名字，再交代它說話的腔調。',
   'agents.offboardTitle': '讓 {name} 卸任？',
@@ -794,12 +796,12 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'adminobs.purposeGenderBlurb': '頭像流水線的性別選擇。',
   'adminobs.purposeAvatarImageBlurb': '建立 / 重建智能體時生成影像。',
   'adminobs.purposeAgentImageBlurb': '智能體在主輪內呼叫影像生成。',
-  // ─── 私訊（Whispers）──────────────────────────────────────────────
-  'whispers.title': '私訊',
+  // ─── 私語（Whispers）──────────────────────────────────────────────
+  'whispers.title': '私語',
   'whispers.subtitle': '可以旁聽的頻道',
-  'whispers.empty': '在群組裡發條訊息，催某位智能體去私訊。',
-  'whispers.noWhispers': '還沒有私訊',
-  'whispers.noWhispersBody': '智能體公開回覆之後，如果覺得還要跟某位隊友私下對一下，就會拉一段私訊出來。',
+  'whispers.empty': '在群組裡發條訊息，催某位智能體去私語。',
+  'whispers.noWhispers': '還沒有私語',
+  'whispers.noWhispersBody': '智能體公開回覆之後，如果覺得還要跟某位隊友私下對一下，就會拉一段私語出來。',
   'whispers.privateThread': '私人對話',
   'whispers.andOneMore': '{a}、{b} 等 1 人',
   'whispers.andNMore': '{a}、{b} 等 {n} 人',
@@ -1228,7 +1230,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'convo.clickToAdd': '點任意成員即可加入。已加入 {count} 位。',
   'convo.noMatchQuery': '沒有符合「{query}」的結果',
   'convo.addedCheck': '✓ 已新增',
-  'convo.kindWhisper': '私訊 · ',
+  'convo.kindWhisper': '私語 · ',
   'convo.kindGroup': '群組 · ',
   'convo.leaving': '離開中…',
   'convo.filterAll': '全部',
@@ -1237,7 +1239,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'convo.filterHumans': '人',
   'convo.filterGroups': '群組',
   'convo.filterEmail': '郵件',
-  'convo.filterWhispers': '私訊',
+  'convo.filterWhispers': '私語',
   // ─── 桌面版面 ─────────────────────────────────────────────────────
   'desktop.openingShip': '正在開啟交付…',
   // ─── 「我」檢視（資料 / 配額 / 電腦 / 專案 / 信任）─────────────
@@ -1278,7 +1280,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'me.resetsInHours': '{n} 小時後重設',
   'me.resetsInDays': '{n} 天後重設',
   'me.sectionPerAgent': '↳ 按智能體的自主權',
-  'me.perAgentIntro': '每位智能體都有一個自主行動的閾值 —— 是否拉人進群組、呼叫工具、跟同事私訊。如果判斷跟你不一致，可以單獨調整。',
+  'me.perAgentIntro': '每位智能體都有一個自主行動的閾值 —— 是否拉人進群組、呼叫工具、跟同事私語。如果判斷跟你不一致，可以單獨調整。',
   'me.autonomyThreshold': '自主權閾值',
   'me.sectionTrackRecords': '↳ 拉進群組戰績',
   'me.sectionProjects': '↳ 專案',
@@ -1518,7 +1520,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
         'poll.submitting': '發布中…',
         'poll.submit': '發起投票',
         
-          // ─── 私訊房間（觀察模式） ────────────────────────────────────────
+          // ─── 私語房間（觀察模式） ────────────────────────────────────────
           'whisper.observerMode': '旁觀模式',
           'whisper.observerHint': '默默檢視 —— 發一句就插入對話',
           'whisper.nAgents': '{n} 位智能體',
@@ -1684,7 +1686,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'mwhisp.observing': '觀察中',
   'mwhisp.headerSub': '靜默檢視智能體之間的對話 —— 它們看不到你。',
   'mwhisp.loading': '正在監聽智能體對話…',
-  'mwhisp.empty': '暫無私語。在群組中發條訊息，推動智能體開始私訊。',
+  'mwhisp.empty': '暫無私語。在群組中發條訊息，推動智能體開始私語。',
   'mwhisp.previewNone': '暫無訊息',
   'mwhisp.moreOne': '{a}、{c} 等 1 人',
   'mwhisp.moreN': '{a}、{c} 等 {n} 人',
@@ -1764,7 +1766,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'mclist.empty': '暫無對話',
   'mclist.filterAll': '全部',
   'mclist.filterAgents': '智能體',
-  'mclist.filterWhispers': '私訊',
+  'mclist.filterWhispers': '私語',
   'mclist.filterHumans': '人類',
   'mclist.openSearch': '開啟搜尋',
   'mclist.closeSearch': '關閉搜尋',
@@ -1866,7 +1868,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'mpinfo.sectionAbout': '關於 {name}',
   'mpinfo.opening': '正在開啟…',
   'mpinfo.btnDM': '私訊',
-  'mpinfo.btnWhisper': '私訊',
+  'mpinfo.btnWhisper': '私語',
   'mpinfo.btnConvene': '召集',
   'mpinfo.emailCopiedTitle': '已複製！',
   'mpinfo.emailTapCopyTitle': '點選複製',
@@ -1954,7 +1956,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'email.toLabel': '收件者',
   'email.attachBtn': '附加',
   'email.removeAria': '移除 {name}',
-  'whisper.headerCount': '私訊 · {n} 則訊息',
+  'whisper.headerCount': '私語 · {n} 則訊息',
   'whisper.twoVoices': '兩位對話者',
   'whisper.nVoices': '{n} 位對話者',
   'notif.moreFromConvo': '這個對話還有 {n} 則訊息',
