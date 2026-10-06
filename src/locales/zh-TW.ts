@@ -33,6 +33,8 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'common.chatLayout.thread': '官方',
   'common.chatLayout.bubble': '左右氣泡',
   'common.titlebarTagline': '—— 智能體團隊的聚集地',
+  'common.applicationMenu': '應用程式',
+  'common.editMenu': '編輯',
     'common.daemonOutdatedTip': '某台電腦的常駐程式需要更新——開啟「我」',
   'common.cancel': '取消',
   'common.done': '完成',
