@@ -83,6 +83,10 @@ cat > "$plist" <<PLIST
     <key>HOME</key><string>$HOME</string>
     <key>CUMORA_VERSION</key><string>$version</string>
     <key>CUMORA_AGENT_READ_PATHS</key><string>$read_paths</string>
+    <!-- Node 26 prints tsx's module.register() deprecation (DEP0205) on every
+         start; same switch as test.sh. Engines inherit it, which only mutes
+         that one warning. -->
+    <key>NODE_OPTIONS</key><string>--disable-warning=DEP0205</string>
 $hermes_env
   </dict>
 </dict></plist>
