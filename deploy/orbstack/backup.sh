@@ -15,7 +15,10 @@
 #   CUMORA_BACKUP_KEEP   how many to keep (default 14; older ones are deleted)
 #   CUMORA_BACKUP_OFFSITE_DIR   also write an encrypted copy here, e.g. a
 #                        Google Drive for desktop folder (see offsite-crypto.sh)
-#   CUMORA_BACKUP_OFFSITE_KEEP  how many encrypted copies to keep (default 30)
+#   CUMORA_BACKUP_OFFSITE_KEEP  how many copies to keep (default 30)
+#   CUMORA_BACKUP_OFFSITE_ENCRYPT  1 (default) encrypts the copy; 0 writes a
+#                        plain .tar.xz, which carries .env's secrets in the
+#                        clear, so only for a folder only you can read
 #
 # The off-site copy is written after the local backup is complete and is
 # checked by decrypting it again before it gets its final name. If it fails,
@@ -35,6 +38,7 @@ dest=${CUMORA_BACKUP_DIR:-$HOME/.cumora/backups}
 keep=${CUMORA_BACKUP_KEEP:-14}
 offsite=${CUMORA_BACKUP_OFFSITE_DIR:-}
 offsite_keep=${CUMORA_BACKUP_OFFSITE_KEEP:-30}
+offsite_encrypt=${CUMORA_BACKUP_OFFSITE_ENCRYPT:-1}
 . "$here/offsite-crypto.sh"
 label=ai.cumora.backup
 plist="$HOME/Library/LaunchAgents/$label.plist"
@@ -46,9 +50,10 @@ case "${1:-}" in
     offsite_env=
     if [ -n "$offsite" ]; then
       case "$offsite" in *[\<\>\&]*) echo "CUMORA_BACKUP_OFFSITE_DIR 不能含 < > &" >&2; exit 64 ;; esac
-      offsite_passphrase >/dev/null || { echo "鑰匙圈裡沒有 $OFFSITE_KEYCHAIN_SERVICE 密碼，見 offsite-crypto.sh" >&2; exit 1; }
+      [ "$offsite_encrypt" = 0 ] || offsite_passphrase >/dev/null || { echo "鑰匙圈裡沒有 $OFFSITE_KEYCHAIN_SERVICE 密碼，見 offsite-crypto.sh" >&2; exit 1; }
       offsite_env="    <key>CUMORA_BACKUP_OFFSITE_DIR</key><string>$offsite</string>
-    <key>CUMORA_BACKUP_OFFSITE_KEEP</key><string>$offsite_keep</string>"
+    <key>CUMORA_BACKUP_OFFSITE_KEEP</key><string>$offsite_keep</string>
+    <key>CUMORA_BACKUP_OFFSITE_ENCRYPT</key><string>$offsite_encrypt</string>"
     fi
     cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -77,7 +82,10 @@ PLIST
     launchctl load "$plist"
     echo "已設定每天 03:30 自動備份（Mac 當時在睡眠的話，醒來後補跑）。"
     echo "備份位置：$dest（保留最近 $keep 份）"
-    [ -z "$offsite" ] || echo "加密異地副本：$offsite（保留最近 $offsite_keep 份）"
+    if [ -n "$offsite" ]; then
+      if [ "$offsite_encrypt" = 0 ]; then echo "異地副本（不加密，內含 .env 的密鑰）：$offsite（保留最近 $offsite_keep 份）"
+      else echo "加密異地副本：$offsite（保留最近 $offsite_keep 份）"; fi
+    fi
     echo "日誌：$log"
     exit 0
     ;;
@@ -163,7 +171,7 @@ fi
 size=$(du -sh "$dest/$name" | cut -f1)
 echo "$(stamp) 備份完成：$dest/$name（$size），保留最近 $keep 份"
 
-# Off-site copy: one encrypted file next to the others in $offsite.
+# Off-site copy: one file next to the others in $offsite.
 [ -n "$offsite" ] || exit 0
 offsite_fail() {
   echo "$(stamp) 異地備份失敗：$*（本機備份 $dest/$name 已完成）" >&2
@@ -171,18 +179,28 @@ offsite_fail() {
   exit 1
 }
 mkdir -p "$offsite" || offsite_fail "建立不了 $offsite"
-enc="$offsite/$name.tar.xz.enc"
-part="$offsite/.$name.tar.xz.enc.partial"
-trap 'rm -f "$part"' EXIT
-tar -C "$dest" -cJf - "$name" | offsite_encrypt > "$part" || offsite_fail "加密失敗（鑰匙圈裡有 $OFFSITE_KEYCHAIN_SERVICE 密碼嗎？）"
-offsite_decrypt < "$part" | tar -tJf - >/dev/null || offsite_fail "加密檔驗證失敗"
+if [ "$offsite_encrypt" = 0 ]; then
+  enc="$offsite/$name.tar.xz"
+  part="$offsite/.$name.tar.xz.partial"
+  trap 'rm -f "$part"' EXIT
+  tar -C "$dest" -cJf - "$name" > "$part" || offsite_fail "打包失敗"
+  tar -tJf "$part" >/dev/null || offsite_fail "副本驗證失敗"
+else
+  enc="$offsite/$name.tar.xz.enc"
+  part="$offsite/.$name.tar.xz.enc.partial"
+  trap 'rm -f "$part"' EXIT
+  tar -C "$dest" -cJf - "$name" | offsite_encrypt > "$part" || offsite_fail "加密失敗（鑰匙圈裡有 $OFFSITE_KEYCHAIN_SERVICE 密碼嗎？）"
+  offsite_decrypt < "$part" | tar -tJf - >/dev/null || offsite_fail "加密檔驗證失敗"
+fi
 mv "$part" "$enc"
 trap - EXIT
 
-count=$(ls -1 "$offsite"/cumora-*.tar.xz.enc 2>/dev/null | wc -l | tr -d ' ')
+# Plain and encrypted copies share one retention count; names sort by time.
+copies() { ls -1 "$offsite"/cumora-*.tar.xz "$offsite"/cumora-*.tar.xz.enc 2>/dev/null; }
+count=$(copies | wc -l | tr -d ' ')
 if [ "$count" -gt "$offsite_keep" ]; then
-  ls -1 "$offsite"/cumora-*.tar.xz.enc | head -n $((count - offsite_keep)) | while read -r old; do
-    rm -f "$old"
+  copies | sed -E 's#.*/##' | sort | head -n $((count - offsite_keep)) | while read -r old; do
+    rm -f "$offsite/$old"
   done
 fi
 echo "$(stamp) 異地副本完成：$enc（$(du -h "$enc" | cut -f1)），保留最近 $offsite_keep 份"

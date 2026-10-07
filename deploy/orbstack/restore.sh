@@ -5,6 +5,7 @@
 #   ./restore.sh <backup folder>      # a specific one (cumora-YYYYMMDD-HHMMSS)
 #   ./restore.sh <file>.tar.xz.enc    # an encrypted off-site copy (decrypted
 #                                     # with the Keychain passphrase first)
+#   ./restore.sh <file>.tar.xz        # an unencrypted off-site copy
 #   ./restore.sh --list               # show the backups it can see
 #
 # What it does, in order:
@@ -58,30 +59,36 @@ case "${1:-}" in
       printf '%s  %s%s\n' "$(du -sh "$b" | cut -f1)" "$b" "$([ -f "$b/env" ] && echo '' || echo '  （沒有 env）')"
     done
     if [ -n "$offsite" ]; then
-      for f in "$offsite"/cumora-*.tar.xz.enc; do
-        [ -f "$f" ] && printf '%s  %s  （加密異地副本）\n' "$(du -h "$f" | cut -f1)" "$f"
+      for f in "$offsite"/cumora-*.tar.xz "$offsite"/cumora-*.tar.xz.enc; do
+        [ -f "$f" ] && printf '%s  %s  （異地副本）\n' "$(du -h "$f" | cut -f1)" "$f"
       done
     fi
     exit 0
     ;;
-  -*) echo "用法：./restore.sh [備份資料夾 | 加密檔.tar.xz.enc | --list]" >&2; exit 64 ;;
+  -*) echo "用法：./restore.sh [備份資料夾 | 異地副本.tar.xz(.enc) | --list]" >&2; exit 64 ;;
   '') backup=$(list_backups | tail -n 1); [ -n "$backup" ] || fail "找不到任何備份（找過：$(printf '%s' "$dirs" | tr '\n' ' ')）" ;;
   *) backup=${1%/} ;;
 esac
 
-# An encrypted off-site copy: decrypt it into a private scratch folder and
-# carry on as if it were a backup folder.
+# An off-site copy: unpack it (decrypting first if needed) into a private
+# scratch folder and carry on as if it were a backup folder.
 case "$backup" in
-  *.tar.xz.enc)
+  *.tar.xz.enc|*.tar.xz)
     [ -f "$backup" ] || fail "找不到 $backup"
     mkdir -p "$HOME/.cumora"
     scratch=$(mktemp -d "$HOME/.cumora/restore-XXXXXX")
     chmod 700 "$scratch"
     trap 'rm -rf "$scratch"' EXIT
-    offsite_decrypt < "$backup" | tar -C "$scratch" -xJf - \
-      || fail "解不開 $backup（鑰匙圈裡的 $OFFSITE_KEYCHAIN_SERVICE 密碼對嗎？）"
-    backup="$scratch/$(basename "$backup" .tar.xz.enc)"
-    echo "已解密：$backup"
+    case "$backup" in
+      *.enc)
+        offsite_decrypt < "$backup" | tar -C "$scratch" -xJf - \
+          || fail "解不開 $backup（鑰匙圈裡的 $OFFSITE_KEYCHAIN_SERVICE 密碼對嗎？）"
+        backup="$scratch/$(basename "$backup" .tar.xz.enc)" ;;
+      *)
+        tar -C "$scratch" -xJf "$backup" || fail "解不開 $backup（檔案損壞？）"
+        backup="$scratch/$(basename "$backup" .tar.xz)" ;;
+    esac
+    echo "已解開：$backup"
     ;;
 esac
 

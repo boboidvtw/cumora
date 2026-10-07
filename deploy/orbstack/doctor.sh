@@ -163,17 +163,19 @@ else
   fi
   offsite=$(plist_env "$backup_plist" CUMORA_BACKUP_OFFSITE_DIR)
   if [ -n "$offsite" ]; then
-    latest=$(ls -1 "$offsite"/cumora-*.tar.xz.enc 2>/dev/null | tail -n 1)
+    latest=$( (cd "$offsite" 2>/dev/null && ls -1 cumora-*.tar.xz cumora-*.tar.xz.enc 2>/dev/null) | sort | tail -n 1)
     if [ -z "$latest" ]; then
-      warn "已設定加密異地副本（$offsite），但還沒有任何一份（下次 03:30 會產生，或先跑 ./backup.sh）"
+      warn "已設定異地副本（$offsite），但還沒有任何一份（下次 03:30 會產生，或先跑 ./backup.sh）"
     else
-      taken=$(date -j -f %Y%m%d-%H%M%S "$(basename "$latest" .tar.xz.enc | sed 's/^cumora-//')" +%s 2>/dev/null || echo 0)
+      taken=$(date -j -f %Y%m%d-%H%M%S "$(printf '%s' "$latest" | sed -E 's/^cumora-//; s/\.tar\.xz(\.enc)?$//')" +%s 2>/dev/null || echo 0)
       age=$(( ($(date +%s) - taken) / 3600 ))
-      if [ "$age" -lt 48 ]; then ok "加密異地副本 $age 小時前：$latest"
-      else warn "加密異地副本是 $(( age / 24 )) 天前：$latest（看 ~/.cumora/backup.log）"; fi
+      if [ "$age" -lt 48 ]; then ok "異地副本 $age 小時前：$offsite/$latest"
+      else warn "異地副本是 $(( age / 24 )) 天前：$offsite/$latest（看 ~/.cumora/backup.log）"; fi
     fi
-    security find-generic-password -s cumora-backup -a "$(id -un)" >/dev/null 2>&1 \
-      || bad "鑰匙圈裡沒有 cumora-backup 加密密碼，異地副本會做不出來"
+    if [ "$(plist_env "$backup_plist" CUMORA_BACKUP_OFFSITE_ENCRYPT)" != 0 ]; then
+      security find-generic-password -s cumora-backup -a "$(id -un)" >/dev/null 2>&1 \
+        || bad "鑰匙圈裡沒有 cumora-backup 加密密碼，異地副本會做不出來"
+    fi
   else
     case "$dir" in
       "$HOME"/Downloads/*|"$HOME"/.cumora/*) warn "備份跟資料在同一顆硬碟（$dir），防不了硬碟壞掉（設定 CUMORA_BACKUP_OFFSITE_DIR，見 README）" ;;
