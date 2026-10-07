@@ -182,7 +182,7 @@ export function MobileApp() {
             <motion.div key="conv-root" className="absolute inset-0"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={fadeTransition}>
-              <ViewBoundary name="Chats">
+              <ViewBoundary name="Chats" labelKey="nav.chats">
               {/* List (parallax background). `isolate` pins the
                   list's internal `z-10` sticky header inside this
                   layer's own stacking context, so it can't paint
@@ -244,7 +244,7 @@ export function MobileApp() {
             <motion.div key="wh-root" className="absolute inset-0"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={fadeTransition}>
-              <ViewBoundary name="Whispers">
+              <ViewBoundary name="Whispers" labelKey="nav.whispers">
               <motion.div
                 className="absolute inset-0 isolate"
                 style={{
@@ -284,7 +284,7 @@ export function MobileApp() {
             <motion.div key="library" className="absolute inset-0"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={fadeTransition}>
-              <ViewBoundary name="Library"><MobileLibrary /></ViewBoundary>
+              <ViewBoundary name="Library" labelKey="nav.library"><MobileLibrary /></ViewBoundary>
             </motion.div>
           )}
 
@@ -293,7 +293,7 @@ export function MobileApp() {
             <motion.div key="shipping" className="absolute inset-0"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={fadeTransition}>
-              <ViewBoundary name="Ship"><Suspense fallback={<div className="h-full grid place-items-center text-sm text-ink-400">{t('mapp.openingShip')}</div>}><ShippingWorkspace compact /></Suspense></ViewBoundary>
+              <ViewBoundary name="Ship" labelKey="nav.ship"><Suspense fallback={<div className="h-full grid place-items-center text-sm text-ink-400">{t('mapp.openingShip')}</div>}><ShippingWorkspace compact /></Suspense></ViewBoundary>
             </motion.div>
           )}
 
@@ -302,7 +302,7 @@ export function MobileApp() {
             <motion.div key="agents" className="absolute inset-0"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={fadeTransition}>
-              <ViewBoundary name="Agents"><MobileAgents /></ViewBoundary>
+              <ViewBoundary name="Agents" labelKey="nav.agents"><MobileAgents /></ViewBoundary>
             </motion.div>
           )}
 
@@ -311,7 +311,7 @@ export function MobileApp() {
             <motion.div key="me" className="absolute inset-0"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={fadeTransition}>
-              <ViewBoundary name="Me"><MobileMe /></ViewBoundary>
+              <ViewBoundary name="Me" labelKey="nav.me"><MobileMe /></ViewBoundary>
             </motion.div>
           )}
         </AnimatePresence>

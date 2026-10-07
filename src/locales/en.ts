@@ -1157,6 +1157,12 @@ export const en = {
   'info.about': 'About {name}',
   // ─── email message rendering (inline in chat bubbles) ─────────────
   'email.deliveryFailedPrefix': 'delivery failed:',
+  'email.dirSent': 'sent',
+  'email.dirReceived': 'received',
+  'email.dirQueued': 'queued',
+  'email.dirFailed': 'failed',
+  'code.copy': 'COPY',
+  'code.copied': 'COPIED',
   'email.reply': 'Reply',
   // ─── email composer drawer ────────────────────────────────────────
   'email.composerNewEmail': 'New email',

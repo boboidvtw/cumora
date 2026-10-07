@@ -92,7 +92,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium leading-tight">{p.name}</div>
             <div className="truncate text-[11px] text-ink-400 leading-tight">
-              {p.kind === 'agent' ? 'agent' : 'human'}{p.role ? ` · ${p.role}` : ''}
+              {t(p.kind === 'agent' ? 'common.agent' : 'common.human')}{p.role ? ` · ${p.role}` : ''}
             </div>
           </div>
         </button>

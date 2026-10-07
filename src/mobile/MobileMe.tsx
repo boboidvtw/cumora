@@ -147,7 +147,7 @@ export function MobileMe() {
                       <div className="min-w-0 flex-1">
                         <div className="text-[13px] font-semibold text-ink-900 leading-tight truncate">{a.name}</div>
                         <div className="font-display italic text-[10.5px] text-ink-500 leading-tight truncate">
-                          {a.role ?? 'agent'}
+                          {a.role ?? t('common.agent')}
                         </div>
                       </div>
                     </div>

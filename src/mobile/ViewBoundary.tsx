@@ -15,8 +15,10 @@ import { Component, type ReactNode } from 'react'
 import { translate, useLocaleStore, type MessageKey } from '@/lib/i18n'
 
 interface Props {
-  /** Human-readable tab name shown in the fallback copy. */
+  /** Tab name for the console log. */
   name: string
+  /** Translated tab label for the fallback copy; falls back to `name`. */
+  labelKey?: MessageKey
   children: ReactNode
 }
 interface State {
@@ -49,7 +51,7 @@ export class ViewBoundary extends Component<Props, State> {
         <div className="absolute inset-0 grid place-items-center bg-paper p-8 text-center">
           <div className="max-w-[280px]">
             <div className="font-display text-[18px] text-ink-900 mb-2">
-              {t('viewBoundary.hitASnag', { name: this.props.name })}
+              {t('viewBoundary.hitASnag', { name: this.props.labelKey ? t(this.props.labelKey) : this.props.name })}
             </div>
             <div className="font-display italic text-[13px] text-ink-500 leading-snug mb-5">
               {this.state.error.message || t('viewBoundary.fallbackMsg')}

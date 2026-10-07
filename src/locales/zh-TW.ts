@@ -233,7 +233,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'chat.slashPollHint': '發起一次投票，智能體和人人都能參與',
   'chat.reply': '回覆',
   'chat.replyToMessage': '回覆這條訊息',
-  'chat.showAuthorInfo': '檢視{name}的詳情',
+  'chat.showAuthorInfo': '檢視 {name} 的詳情',
   'chat.inThisConversation': '在本次對話中',
   'chat.deliveryUnconfirmed': '未能確認送達',
   'chat.failedToSend': '傳送失敗',
@@ -1159,6 +1159,12 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
   'info.about': '關於 {name}',
   // ─── 郵件訊息渲染（聊天氣泡內） ─────────────────────────────────
   'email.deliveryFailedPrefix': '傳送失敗：',
+  'email.dirSent': '已寄出',
+  'email.dirReceived': '已收到',
+  'email.dirQueued': '排隊中',
+  'email.dirFailed': '失敗',
+  'code.copy': '複製',
+  'code.copied': '已複製',
   'email.reply': '回覆',
   // ─── 郵件撰寫抽屜 ────────────────────────────────────────────────
   'email.composerNewEmail': '新郵件',
@@ -1849,7 +1855,7 @@ export const zhTW: Partial<Record<keyof typeof en, string>> = {
 
   // ─── 檢視邊界（錯誤回退） ─────────────────────────────────────────
   'viewBoundary.tryAgain': '重試',
-  'viewBoundary.hitASnag': '{name}遇到了一點問題。',
+  'viewBoundary.hitASnag': '{name} 遇到了一點問題。',
   'viewBoundary.fallbackMsg': '顯示此頁面時發生了意外錯誤。',
 
   // ─── 行動裝置成員詳情 ──────────────────────────────────────────────

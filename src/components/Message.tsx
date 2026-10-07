@@ -179,6 +179,7 @@ function MentionCard({ p, x, y }: { p: Participant; x: number; y: number }) {
  *  comments italic --ink-300. Deliberately NOT a heavy dark card — sits
  *  inside the bubble as a calm inset instead. */
 export function CodeBlock({ lang, code }: { lang: string; code: string }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const onCopy = () => {
     void navigator.clipboard?.writeText(code).then(() => {
@@ -229,7 +230,7 @@ export function CodeBlock({ lang, code }: { lang: string; code: string }) {
             background: copied ? 'rgba(110, 197, 106, 0.10)' : 'transparent',
           }}
         >
-          {copied ? 'COPIED' : 'COPY'}
+          {copied ? t('code.copied') : t('code.copy')}
         </button>
       </div>
       <pre
@@ -1138,7 +1139,7 @@ function EmailCard({ msg }: { msg: Message }) {
             style={{ background: dirChipBg, color: dirChipColor }}
           >
             <IMail className="w-3 h-3" strokeWidth={2} />
-            {isFailed ? 'failed' : isQueued ? 'queued' : isOut ? 'sent' : 'received'}
+            {t(isFailed ? 'email.dirFailed' : isQueued ? 'email.dirQueued' : isOut ? 'email.dirSent' : 'email.dirReceived')}
           </span>
           {e.hasHtml && (
             <button

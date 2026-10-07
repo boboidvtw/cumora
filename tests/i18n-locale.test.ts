@@ -65,6 +65,25 @@ describe('zh-TW catalogue', () => {
       assert.ok(!simplified.test(tw ?? ''), `${key}: ${tw}`)
     }
   })
+
+  // Placeholders are mostly names and numbers ("Hermes", "6"); without a
+  // space they read as 檢視Hermes的詳情. ~200 strings already space them.
+  // Exempt: placeholders that are filled with Chinese text themselves.
+  it('puts a space between a {placeholder} and Chinese text', () => {
+    const glued = /[\u3400-\u9fff]\{\w+\}|\{\w+\}[\u3400-\u9fff]/
+    const filledWithChinese = new Set([
+      'adminobs.rollupSub', // 花費
+      'adminobs.cacheBarsHead', // 可節省金額
+      'waitlist.noEntriesMatch', // 待處理
+      'waitlist.noEntries',
+      'mpinfo.itsYou', // 我
+      'notif.reminderBody', // 5 分鐘後
+    ])
+    const hits = Object.entries(zhTW)
+      .filter(([key, tw]) => !filledWithChinese.has(key) && glued.test(tw ?? ''))
+      .map(([key, tw]) => `${key}: ${tw}`)
+    assert.deepEqual(hits, [])
+  })
 })
 
 describe('documentTitle', () => {

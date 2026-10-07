@@ -11,6 +11,7 @@ import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { useT } from '@/lib/i18n'
+import { workspaceRoleLabel } from '@/lib/workspace-role'
 import { useApp } from '@/stores/app'
 import { useAuth } from '@/stores/auth'
 import { InvitePeopleModal } from './InvitePeopleModal'
@@ -115,7 +116,7 @@ export function CompanySwitcher() {
               </span>
               <span className="flex-1 min-w-0">
                 <span className="block text-[12.5px] text-ink-900 truncate">{c.name}</span>
-                <span className="block text-[10.5px] text-ink-300 italic font-display">{c.role}</span>
+                <span className="block text-[10.5px] text-ink-300 italic font-display">{workspaceRoleLabel(t, c.role)}</span>
               </span>
               {c.id === activeId && <span className="text-skype-deep text-[12px]">●</span>}
             </button>

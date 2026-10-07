@@ -1158,6 +1158,12 @@ export const zhCN: Partial<Record<keyof typeof en, string>> = {
   'info.about': '关于 {name}',
   // ─── 邮件消息渲染（聊天气泡内） ─────────────────────────────────
   'email.deliveryFailedPrefix': '发送失败：',
+  'email.dirSent': '已发送',
+  'email.dirReceived': '已收到',
+  'email.dirQueued': '排队中',
+  'email.dirFailed': '失败',
+  'code.copy': '复制',
+  'code.copied': '已复制',
   'email.reply': '回复',
   // ─── 邮件撰写抽屉 ────────────────────────────────────────────────
   'email.composerNewEmail': '新邮件',
