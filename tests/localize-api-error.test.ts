@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { translate, type MessageKey } from '../src/lib/i18n'
@@ -38,4 +39,32 @@ test('every listed server message reads the same in English', () => {
 
 test('unrecognised messages pass through', () => {
   assert.equal(localizeApiError('something new from upstream', zhTW), 'something new from upstream')
+})
+
+// Every fixed `{ error }` string in server/src/api is either translated
+// (KNOWN_API_ERRORS) or recorded as reviewed in api-errors-reviewed.json
+// (API-client validation a person can't reach from the UI). A new string
+// from an upstream merge fails here instead of showing up in English.
+test('every server error string is translated or reviewed', () => {
+  const dir = new URL('../server/src/api/', import.meta.url)
+  const patterns = [
+    /HttpError\(\s*\d+\s*,\s*(['"])((?:\\.|(?!\1).)*)\1\s*[,)]/g,
+    /\berror:\s*(['"])((?:\\.|(?!\1).)*)\1/g,
+  ]
+  const found = new Set<string>()
+  for (const name of readdirSync(dir)) {
+    const source = readFileSync(new URL(name, dir), 'utf8')
+    for (const re of patterns) for (const m of source.matchAll(re)) found.add(m[2].replace(/\\(['"])/g, '$1'))
+  }
+  const reviewed = new Set<string>(JSON.parse(readFileSync(new URL('./api-errors-reviewed.json', import.meta.url), 'utf8')))
+  const known = new Set(KNOWN_API_ERRORS)
+  const missing = [...found].filter((s) => !known.has(s) && !reviewed.has(s) && localizeApiError(s, zhTW) === s)
+  assert.deepEqual(missing, [], 'translate these in localize-api-error.ts or add them to tests/api-errors-reviewed.json')
+  assert.ok(found.size > 100, `only ${found.size} server error strings found — did the extraction break?`)
+})
+
+test('workspace and computer errors people hit from the UI are translated', () => {
+  assert.equal(localizeApiError('type the workspace name exactly to confirm deletion', zhTW), '請完整輸入工作區名稱來確認刪除')
+  assert.equal(localizeApiError('invalid pairing token', zhTW), '配對碼無效')
+  assert.match(localizeApiError('Free tier agents run on your own computer. Upgrade to Pro to use Cumora Cloud.', zhTW), /沒有 Cumora Cloud/)
 })
