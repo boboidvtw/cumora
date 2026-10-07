@@ -6,8 +6,9 @@
  * split: Traditional tags go to zh-TW, the rest of Chinese to zh-CN.
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
-import { LOCALES, localeFromTags, translate } from '../src/lib/i18n'
+import { documentTitle, LOCALES, localeFromTags, translate } from '../src/lib/i18n'
 import { en } from '../src/locales/en'
 import { zhTW } from '../src/locales/zh-TW'
 
@@ -63,5 +64,17 @@ describe('zh-TW catalogue', () => {
     for (const [key, tw] of Object.entries(zhTW)) {
       assert.ok(!simplified.test(tw ?? ''), `${key}: ${tw}`)
     }
+  })
+})
+
+describe('documentTitle', () => {
+  it('follows the locale, so the browser tab is not stuck in English', () => {
+    assert.equal(documentTitle('zh-TW'), 'Cumora —— 智能體團隊的聚集地')
+    assert.equal(documentTitle('zh-CN'), 'Cumora —— 智能体团队的汇合地')
+  })
+
+  it('matches the static <title> in index.html for English', () => {
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+    assert.equal(html.match(/<title>(.*)<\/title>/)?.[1], documentTitle('en'))
   })
 })

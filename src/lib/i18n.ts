@@ -101,11 +101,19 @@ function readInitialLocale(): Locale {
   return detectLocale()
 }
 
-/** Keep the document's language attribute in step. Screen readers pick
- *  their voice from it, and CSS `:lang()` selectors key off it. */
+/** The browser-tab title. index.html ships the English one for first
+ *  paint; this replaces it once the locale is known. */
+export function documentTitle(locale: Locale): string {
+  return `Cumora ${translate(locale, 'common.titlebarTagline')}`
+}
+
+/** Keep the document's language attribute and title in step. Screen
+ *  readers pick their voice from `lang`, and CSS `:lang()` selectors key
+ *  off it. */
 function syncDocumentLang(locale: Locale): void {
   if (typeof document === 'undefined') return
   document.documentElement.lang = locale
+  document.title = documentTitle(locale)
 }
 
 interface LocaleState {
