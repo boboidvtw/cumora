@@ -7,7 +7,7 @@ import { useConversations } from '@/stores/conversations'
 import { useParticipants } from '@/stores/participants'
 import { IBoard, ICalendar, IClock, IRepeat } from '@/components/icons'
 import { cn } from '@/lib/utils'
-import { useT, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useT, type MessageKey } from '@/lib/i18n'
 import { EventEditor } from '@/components/EventEditor'
 import { DateTimePicker } from '@/components/DateTimePicker'
 import { boardDueStatus, localCalendarDay } from '@/lib/board-due-date'
@@ -155,7 +155,7 @@ function PeekUnavailable({
 function formatShortDate(iso: string, t: ReturnType<typeof useT>): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return t('peek.recently')
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function formatTime(d: Date): string {
@@ -165,15 +165,15 @@ function formatTime(d: Date): string {
 function formatEventRange(event: CalendarEvent, t: ReturnType<typeof useT>): string {
   const start = new Date(event.startAt)
   if (Number.isNaN(start.getTime())) return event.allDay ? t('peek.allDay') : t('peek.timeUnavailable')
-  if (event.allDay) return start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-  const startLabel = `${start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} - ${formatTime(start)}`
+  if (event.allDay) return start.toLocaleDateString(currentLocale(), { weekday: 'short', month: 'short', day: 'numeric' })
+  const startLabel = `${start.toLocaleDateString(currentLocale(), { weekday: 'short', month: 'short', day: 'numeric' })} - ${formatTime(start)}`
   if (!event.endAt) return startLabel
   const end = new Date(event.endAt)
   if (Number.isNaN(end.getTime())) return startLabel
   const sameDay = start.toDateString() === end.toDateString()
   return sameDay
     ? `${startLabel}-${formatTime(end)}`
-    : `${startLabel}-${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${formatTime(end)}`
+    : `${startLabel}-${end.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' })} ${formatTime(end)}`
 }
 
 function describeRecurrence(r: RecurrenceRule | null, t: ReturnType<typeof useT>): string {

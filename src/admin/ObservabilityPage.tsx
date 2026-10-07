@@ -31,7 +31,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Select } from '@/components/Select'
 import { Combobox } from '@/components/Combobox'
-import { useLocale, useT, tLabel, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useLocale, useT, tLabel, type MessageKey } from '@/lib/i18n'
 import {
   adminApi,
   type LlmCallPurpose,
@@ -413,7 +413,7 @@ export function ObservabilityPage() {
               className="obs-refresh-btn"
               onClick={triggerRefresh}
               disabled={refreshing}
-              title={lastUpdated ? t('adminobs.refreshedTitle', { time: new Date(lastUpdated).toLocaleTimeString() }) : t('adminobs.refreshTitle')}
+              title={lastUpdated ? t('adminobs.refreshedTitle', { time: new Date(lastUpdated).toLocaleTimeString(currentLocale()) }) : t('adminobs.refreshTitle')}
               aria-label={t('adminobs.refreshAria')}
             >
               <span className={`obs-refresh-icon${refreshing ? ' is-spinning' : ''}`} aria-hidden>↻</span>
@@ -429,7 +429,7 @@ export function ObservabilityPage() {
         </div>
         {lastUpdated && (
           <div className="obs-updated" aria-live="polite">
-            {t('adminobs.updatedAt', { time: new Date(lastUpdated).toLocaleTimeString() })}
+            {t('adminobs.updatedAt', { time: new Date(lastUpdated).toLocaleTimeString(currentLocale()) })}
             {autoRefreshMs > 0 && <> · {t('adminobs.autoEvery', { label: (() => { const found = REFRESH_INTERVALS.find((r) => r.ms === autoRefreshMs); return found ? tLabel(t, REFRESH_LABEL_KEY[found.ms], found.label).replace(/^(Every |每 )/, '') : '' })() })}</>}
             {refreshing && <> · {t('adminobs.refreshing')}</>}
           </div>
@@ -1222,7 +1222,7 @@ function DaemonVersionTable({ rows, unit, loading, t }: {
             <div className="obs-cell-num">{hitRate != null ? <span className={cacheToneClass(hitRate)}>{fmtPct(hitRate, 1)}</span> : '—'}</div>
             <div className="obs-cell-num">{unit === 'usd' ? fmtUsd(avgCost, 6) : fmtTokens(avgTok)}</div>
             <div className="obs-cell-num">{r.failureRate > 0 ? <span style={{ color: r.failureRate > 0.1 ? 'var(--coral-deep)' : 'var(--ink-700)' }}>{fmtPct(r.failureRate, 1)}</span> : '—'}</div>
-            <div className="obs-cell-num obs-cell-sub-only" title={new Date(r.lastSeen).toLocaleString()}>{relativeTime(r.lastSeen, t)}</div>
+            <div className="obs-cell-num obs-cell-sub-only" title={new Date(r.lastSeen).toLocaleString(currentLocale())}>{relativeTime(r.lastSeen, t)}</div>
           </div>
         )
       })}
@@ -1409,7 +1409,7 @@ function DrillCallCard({ call, unit, onJumpToRun, onJumpToAgent, t }: {
         <div className="obs-drill-card-headtext">
           <div className="obs-drill-card-title">
             {purposeLabel(t, call.purpose)}
-            <span className="obs-drill-card-when">· {new Date(call.createdAt).toLocaleString()}</span>
+            <span className="obs-drill-card-when">· {new Date(call.createdAt).toLocaleString(currentLocale())}</span>
           </div>
           <div className="obs-drill-card-sub">
             <span className="obs-mono">{call.model}</span>

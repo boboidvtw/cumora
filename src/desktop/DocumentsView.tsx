@@ -3,7 +3,7 @@ import { useDocuments } from '@/stores/documents'
 import { DocumentEditor } from '@/components/DocumentEditor'
 import { useAuth } from '@/stores/auth'
 import { useParticipants } from '@/stores/participants'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { IPlus } from '@/components/icons'
 
@@ -106,5 +106,5 @@ function timeAgo(iso: string, t: ReturnType<typeof useT>): string {
   if (ms < 60_000) return t('docs.justNow')
   if (ms < 3600_000) return t('docs.minutesAgo', { n: Math.floor(ms / 60_000) })
   if (ms < 86_400_000) return t('docs.hoursAgo', { n: Math.floor(ms / 3_600_000) })
-  return new Date(iso).toLocaleDateString()
+  return new Date(iso).toLocaleDateString(currentLocale())
 }

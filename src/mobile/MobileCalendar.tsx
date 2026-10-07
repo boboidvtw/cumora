@@ -15,7 +15,7 @@ import { EventEditor, type EventEditorPrefill } from '@/components/EventEditor'
 import { Avatar } from '@/components/Avatar'
 import { ICalendar, IClock, IRepeat } from '@/components/icons'
 import { tapHaptic } from '@/lib/native'
-import { useT, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useT, type MessageKey } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { nextOccurrenceOnOrAfter } from '@/lib/recurrence'
 import type { CalendarEvent } from '@/types'
@@ -168,7 +168,7 @@ export function MobileCalendar() {
     setEditing({ mode: 'new', prefill: { startAt: start, endAt: end } })
   }
 
-  const monthLabel = cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  const monthLabel = cursor.toLocaleDateString(currentLocale(), { month: 'long', year: 'numeric' })
 
   return (
     <div className="relative bg-paper">
@@ -308,7 +308,7 @@ function DayDetail({ day, items, onEdit, onNew, byId }: {
   byId: Record<string, { id: string; name: string; kind?: string; avatarUrl?: string | null; avatarBg?: string; initial?: string; status?: string }>
 }) {
   const t = useT()
-  const heading = day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  const heading = day.toLocaleDateString(currentLocale(), { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
     <div>

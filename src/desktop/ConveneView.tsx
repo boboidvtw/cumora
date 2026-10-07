@@ -5,7 +5,7 @@ import { useParticipants } from '@/stores/participants'
 import { Avatar } from '@/components/Avatar'
 import { api, ws, type ApiConveneSession, type ApiConveneTranscript } from '@/api/client'
 import { cn } from '@/lib/utils'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 
 interface ConveneState {
   session: ApiConveneSession | null
@@ -116,7 +116,7 @@ export function ConveneView() {
           <em className="italic text-coral-deep" style={{ fontStyle: 'italic', fontWeight: 400 }}>{state.session.flair}</em>
         )}
         <div className="text-[12px] text-ink-500 ml-auto">
-          {t('convene.startedAt', { time: new Date(state.session.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}
+          {t('convene.startedAt', { time: new Date(state.session.started_at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) })}
         </div>
       </div>
 
@@ -200,7 +200,7 @@ export function ConveneView() {
             return (
               <div key={entry.id} className="text-[12px] leading-[1.5]">
                 <div className="font-bold text-ink-900 text-[11px]">
-                  {author.name} <span className="text-ink-300 font-normal ml-2 font-mono">{new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  {author.name} <span className="text-ink-300 font-normal ml-2 font-mono">{new Date(entry.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div className={cn('text-ink-700', entry.kind === 'decision' && 'text-whisper-deep font-semibold')}>{entry.body}</div>
               </div>

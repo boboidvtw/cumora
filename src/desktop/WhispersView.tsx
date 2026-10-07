@@ -5,7 +5,7 @@ import { WhisperRoom } from '@/components/WhisperRoom'
 import { HiveAvatar } from '@/components/HiveAvatar'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { cn } from '@/lib/utils'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 import { useResizableWidth } from '@/lib/useResizableWidth'
 import type { Participant } from '@/types'
 
@@ -113,7 +113,7 @@ export function WhispersView() {
                   </div>
                 </div>
                 <div className="text-[10.5px] text-ink-300 tabular-nums">
-                  {new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(w.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </button>
             )

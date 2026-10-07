@@ -15,7 +15,7 @@ import { ResizeHandle } from '@/components/ResizeHandle'
 import { RichBody, CodeBlock } from '@/components/Message'
 import { useParticipants } from '@/stores/participants'
 import { useResizableWidth } from '@/lib/useResizableWidth'
-import { useT, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useT, type MessageKey } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 type StatusFilter = ApiAgentRunStatus | 'all'
@@ -64,7 +64,7 @@ const LEVEL_STYLE: Record<ApiAgentEvent['level'], string> = {
 }
 
 function clock(ts: string): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return new Date(ts).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function elapsed(ms: number): string {

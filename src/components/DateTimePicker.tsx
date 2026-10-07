@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ICalendar } from '@/components/icons'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 import { formatPickerDateTime, pickerCalendarDate } from '@/lib/picker-calendar-date'
 import { cn } from '@/lib/utils'
 
@@ -68,7 +68,7 @@ function parseValue(s: string): { date: Date | null; hour: number; minute: numbe
 function formatDisplay(s: string, mode: 'datetime' | 'date', placeholder: string): string {
   const { date, hour, minute } = parseValue(s)
   if (!date) return placeholder
-  const left = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const left = date.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric', year: 'numeric' })
   if (mode === 'date') return left
   return `${left}  ${pad(hour)}:${pad(minute)}`
 }
@@ -225,7 +225,7 @@ export function DateTimePicker({
                 aria-label={t('dtpicker.prevMonth')}
               >‹</button>
               <span className="text-[13px] font-semibold text-ink-900 mx-1 min-w-[120px] text-center">
-                {cursorMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                {cursorMonth.toLocaleDateString(currentLocale(), { month: 'long', year: 'numeric' })}
               </span>
               <button
                 type="button"

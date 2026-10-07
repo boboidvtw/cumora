@@ -16,7 +16,7 @@ import { IDoc, IBoard, ICalendar, IPlus } from '@/components/icons'
 import { MobileCalendar } from './MobileCalendar'
 import { EventEditor } from '@/components/EventEditor'
 import { cn } from '@/lib/utils'
-import { useT, type MessageKey, useTLabel } from '@/lib/i18n'
+import { currentLocale, useT, type MessageKey, useTLabel } from '@/lib/i18n'
 
 type LibTab = 'documents' | 'boards' | 'calendar'
 
@@ -145,7 +145,7 @@ function timeAgo(iso: string, t: ReturnType<typeof useT>): string {
   if (ms < 60_000) return t('docs.justNow')
   if (ms < 3600_000) return t('docs.minutesAgo', { n: Math.floor(ms / 60_000) })
   if (ms < 86_400_000) return t('docs.hoursAgo', { n: Math.floor(ms / 3_600_000) })
-  return new Date(iso).toLocaleDateString()
+  return new Date(iso).toLocaleDateString(currentLocale())
 }
 
 function DocumentsList() {

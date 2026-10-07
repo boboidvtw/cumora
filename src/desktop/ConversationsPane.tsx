@@ -15,7 +15,7 @@ import { ResizeHandle } from '@/components/ResizeHandle'
 import { ISearch, IMail, IPlus } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { api, type ApiProject, type ApiSearchResults } from '@/api/client'
-import { useLocale, useT, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useLocale, useT, type MessageKey } from '@/lib/i18n'
 
 /** The reactive translator, threaded into the helpers below so they stay
  *  pure and their callers' components re-render on a locale switch. */
@@ -88,8 +88,8 @@ function muteHint(t: Translator, mutedUntil: string | null | undefined): string 
   const sameDay = until.toDateString() === now.toDateString()
   return t('convo.muteHintUntil', {
     when: sameDay
-      ? until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : until.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      ? until.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })
+      : until.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' }),
   })
 }
 
@@ -356,8 +356,8 @@ function muteTooltip(t: Translator, mutedUntil: string | null | undefined): stri
   const now = new Date()
   const sameDay = until.toDateString() === now.toDateString()
   const fmt = sameDay
-    ? until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : until.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    ? until.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })
+    : until.toLocaleString(currentLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   return t('convo.mutedUntil', { when: fmt })
 }
 
@@ -545,7 +545,7 @@ function SearchResultsPane({
           const idx = messagesStart + i
           const sel = idx === selectedIdx
           const when = new Date(m.createdAt)
-          const tsLabel = Number.isNaN(when.getTime()) ? '' : when.toLocaleString([], {
+          const tsLabel = Number.isNaN(when.getTime()) ? '' : when.toLocaleString(currentLocale(), {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
           })
           return (

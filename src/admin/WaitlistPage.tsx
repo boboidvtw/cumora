@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminApi, type AdminWaitlistEntry } from './api'
 import { Pager } from './Pager'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 
 type Tab = 'pending' | 'approved' | 'rejected'
 
@@ -162,5 +162,5 @@ export function WaitlistPage({ onChanged }: { onChanged: () => void }) {
 
 function fmtDateTime(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleString(undefined, { year: '2-digit', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleString(currentLocale(), { year: '2-digit', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }

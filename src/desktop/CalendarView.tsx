@@ -24,7 +24,7 @@ import { useMe } from '@/stores/auth'
 import { Avatar } from '@/components/Avatar'
 import { IPlus, ICalendar, IClock, IRepeat, ITrash } from '@/components/icons'
 import { EventEditor, type EventEditorPrefill } from '@/components/EventEditor'
-import { useLocale, useT } from '@/lib/i18n'
+import { currentLocale, useLocale, useT } from '@/lib/i18n'
 import { weekRangeLabel } from '@/lib/calendar-range-label'
 import { cn } from '@/lib/utils'
 import { nextOccurrenceOnOrAfter } from '@/lib/recurrence'
@@ -73,7 +73,7 @@ function formatTime(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 function formatDateLong(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  return d.toLocaleDateString(currentLocale(), { weekday: 'long', month: 'long', day: 'numeric' })
 }
 function addDays(d: Date, n: number): Date { const out = new Date(d); out.setDate(out.getDate() + n); return out }
 
@@ -326,7 +326,7 @@ function MonthGrid({ cursor, events, onEdit, onNew }: GridProps) {
           onClose={() => setMenu(null)}
           items={[
             {
-              label: t('cal.newEventOn', { date: menu.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }),
+              label: t('cal.newEventOn', { date: menu.date.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' }) }),
               onClick: () => {
                 const start = new Date(menu.date); start.setHours(9, 0, 0, 0)
                 const end = new Date(menu.date); end.setHours(10, 0, 0, 0)

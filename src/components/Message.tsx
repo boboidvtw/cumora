@@ -28,7 +28,7 @@ import { useBoards } from '@/stores/boards'
 import { useCalendar } from '@/stores/calendar'
 import { PollBubble } from './PollBubble'
 import { LinkPreview, firstUrlInBody } from './LinkPreview'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 import { localizeNotice } from '@/lib/localize-notice'
 import { useChatLayoutStore } from '@/lib/chatLayout'
 
@@ -574,7 +574,7 @@ function timeAgo(iso: string, t: ReturnType<typeof useT>): string {
   if (ms < 60_000) return t('docs.justNow')
   if (ms < 3_600_000) return t('docs.minutesAgo', { n: Math.floor(ms / 60_000) })
   if (ms < 86_400_000) return t('docs.hoursAgo', { n: Math.floor(ms / 3_600_000) })
-  return new Date(iso).toLocaleDateString()
+  return new Date(iso).toLocaleDateString(currentLocale())
 }
 
 function DocumentArtifactCard({ id: rawId, conversationId }: { id: string; conversationId: string }) {
@@ -862,7 +862,7 @@ function CalendarArtifactCard({ id: rawId }: { id: string }) {
   const assignee = event?.assigneeId ? byId[event.assigneeId]?.name ?? event.assigneeId : null
   const start = event ? new Date(event.startAt) : null
   const startLabel = start && Number.isFinite(start.getTime())
-    ? `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    ? `${start.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' })} - ${start.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}`
     : null
 
   return (

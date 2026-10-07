@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { adminApi, type AdminUser, type AdminUserDetail, type AdminStats, type Tier } from './api'
 import { Pager } from './Pager'
 import { useAuth } from '@/stores/auth'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 
 const PAGE = 50
 
@@ -291,9 +291,9 @@ function DetailField({ label, value, mono }: { label: string; value: string; mon
 
 function fmtDate(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString(undefined, { year: '2-digit', month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(currentLocale(), { year: '2-digit', month: 'short', day: 'numeric' })
 }
 function fmtDateTime(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleString(undefined, { year: '2-digit', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleString(currentLocale(), { year: '2-digit', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }

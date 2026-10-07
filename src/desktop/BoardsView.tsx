@@ -11,7 +11,7 @@ import { ResizeHandle } from '@/components/ResizeHandle'
 import { Select } from '@/components/Select'
 import { DateTimePicker } from '@/components/DateTimePicker'
 import { useResizableWidth } from '@/lib/useResizableWidth'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 import { IBoard, IPlus, IAt, ITrash, IMore } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { boardDueStatus, localCalendarDay } from '@/lib/board-due-date'
@@ -1277,7 +1277,7 @@ function AssigneePicker({ value, onChange, meId }: {
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso)
-    return d.toLocaleString(undefined, {
+    return d.toLocaleString(currentLocale(), {
       month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
     })

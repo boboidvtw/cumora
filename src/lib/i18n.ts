@@ -166,6 +166,14 @@ export function useLocale(): Locale {
   return useLocaleStore((s) => s.locale)
 }
 
+/** The in-app locale, non-reactive — pass it to `toLocale*String` and
+ *  `Intl` formatters so dates follow the language picked in the app rather
+ *  than the browser's. Components that must re-render on a switch use
+ *  {@link useLocale}. */
+export function currentLocale(): Locale {
+  return useLocaleStore.getState().locale
+}
+
 /** Non-reactive translator, for module scope and event handlers. A
  *  component that renders the result must use {@link useT} instead —
  *  this one won't re-render anything when the locale changes. */

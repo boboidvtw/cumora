@@ -11,7 +11,7 @@ import { Avatar } from '@/components/Avatar'
 import { Checkbox } from '@/components/Checkbox'
 import { AppearancePicker, ChatLayoutPicker } from '@/components/AppearancePicker'
 import { LanguagePicker } from '@/components/LanguagePicker'
-import { useT, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useT, type MessageKey } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { api, getPairingServerOrigin, getServerOrigin, type ApiProject, type ApiQuotaSnapshot, type ApiQuotaWindow } from '@/api/client'
 import { ENGINE_BIN, ENGINE_LABEL, RUNNABLE_ENGINES, RUNNABLE_ENGINE_IDS, engineLabel, type RunnableEngineId } from '@/lib/engines'
@@ -224,7 +224,7 @@ function fmtUsd(n: number): string {
   if (n < 0.01) return '<$0.01'
   if (n < 10) return `$${n.toFixed(2)}`
   if (n < 1000) return `$${n.toFixed(2)}`
-  return `$${Math.round(n).toLocaleString()}`
+  return `$${Math.round(n).toLocaleString(currentLocale())}`
 }
 
 /** Best-effort "resets in 3h" / "resets in 2d" string. Falls back to a

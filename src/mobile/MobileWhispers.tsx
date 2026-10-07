@@ -14,7 +14,7 @@ import { motion } from 'framer-motion'
 import { Pressable } from './Pressable'
 import { PullToRefresh } from './PullToRefresh'
 import { tapHaptic } from '@/lib/native'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 import { useWhispers, whisperMessages, type WhispersStateLike } from '@/stores/whispers'
 import { useParticipants } from '@/stores/participants'
 import { HiveAvatar } from '@/components/HiveAvatar'
@@ -38,8 +38,8 @@ function shortTime(iso: string): string {
   const diff = now - d.getTime()
   if (diff < 60_000) return 'now'
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m`
-  if (diff < 86_400_000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  if (diff < 86_400_000) return d.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' })
 }
 
 function WhisperInline({ body }: { body: string }) {
@@ -270,7 +270,7 @@ function Bubble({ msg }: { msg: ApiWhisperMessage }) {
   const tsDate = tsRaw ? new Date(tsRaw) : new Date()
   const tsLabel = Number.isNaN(tsDate.getTime())
     ? ''
-    : tsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : tsDate.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="grid grid-cols-[28px_1fr] gap-2 items-start animate-rise mr-[12%]">

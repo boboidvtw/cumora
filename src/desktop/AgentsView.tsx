@@ -8,7 +8,7 @@ import { Avatar } from '@/components/Avatar'
 import { IPlus } from '@/components/icons'
 import { AgentEditor } from '@/components/AgentEditor'
 import { api } from '@/api/client'
-import { useT, type MessageKey } from '@/lib/i18n'
+import { currentLocale, useT, type MessageKey } from '@/lib/i18n'
 import { engineLabel } from '@/lib/engines'
 import type { Participant } from '@/types'
 
@@ -278,7 +278,7 @@ function ConfirmOffboard({ p, onCancel, onConfirmed }: {
 function FormerAgentCard({ p, onRehire }: { p: Participant; onRehire: (p: Participant) => void }) {
   const t = useT()
   const departed = p.departedAt
-    ? t('agents.offboardedAt', { date: new Date(p.departedAt).toLocaleDateString() })
+    ? t('agents.offboardedAt', { date: new Date(p.departedAt).toLocaleDateString(currentLocale()) })
     : t('agents.offboarded')
   return (
     <div className="bg-cloud rounded-[14px] p-4 flex items-center gap-3 transition hover:shadow-soft"

@@ -13,7 +13,7 @@ import { DocumentLink } from './DocumentLink'
 import { CalendarLink } from './CalendarLink'
 import type { ApiWhisperMessage } from '@/api/client'
 import type { Participant } from '@/types'
-import { useT } from '@/lib/i18n'
+import { currentLocale, useT } from '@/lib/i18n'
 
 /** Inline-only renderer for whisper bubbles — keeps the dashed-coral
  *  mention chip (whispers use a different visual register than the main
@@ -122,7 +122,7 @@ function Bubble({ msg }: { msg: ApiWhisperMessage }) {
   const tsDate = tsRaw ? new Date(tsRaw) : new Date()
   const tsLabel = Number.isNaN(tsDate.getTime())
     ? ''
-    : tsDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : tsDate.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })
 
   // Whispers is an observer view — the viewer isn't a participant, so the
   // DM-style left/right split doesn't apply. Every bubble reads
@@ -257,7 +257,7 @@ export function WhisperRoom({ pairId }: { pairId: string }) {
             {isGroup ? t('whisper.nAgents', { n: ms.length }) : (whisper.about ?? t('whisper.privateThread'))}
             <span className="not-italic text-ink-300"> · </span>
             <span className="not-italic text-ink-300">
-              {t('whisper.startedAt', { time: new Date(whisper.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}
+              {t('whisper.startedAt', { time: new Date(whisper.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) })}
             </span>
           </div>
         </div>
@@ -265,7 +265,7 @@ export function WhisperRoom({ pairId }: { pairId: string }) {
 
       {/* Thread */}
       <div className="overflow-y-auto py-3 px-6 pb-3 flex flex-col gap-3 relative">
-        <Divider label={t('whisper.openedAt', { time: new Date(whisper.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })} />
+        <Divider label={t('whisper.openedAt', { time: new Date(whisper.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) })} />
         {messages.length === 0 && (
           <div className="text-center text-ink-300 text-[12px] font-display italic py-6">{t('whisper.noMessages')}</div>
         )}
@@ -324,7 +324,7 @@ export function WhisperInspector({ pairId }: { pairId: string }) {
           {whisper.about ?? whisper.title ?? t('whisper.privateThread')}
         </h3>
         <div className="font-display italic text-[12px] leading-[1.6] text-ink-500 px-1.5">
-          {t('whisper.openedAt', { time: new Date(whisper.createdAt).toLocaleString() })}
+          {t('whisper.openedAt', { time: new Date(whisper.createdAt).toLocaleString(currentLocale()) })}
         </div>
       </div>
 
