@@ -19,9 +19,11 @@
 #   ./install-local-daemon.sh --uninstall          # back to the npm daemon
 #   ./install-local-daemon.sh --hermes             # also run Hermes agents (in containers)
 #   ./install-local-daemon.sh --no-hermes          # stop running Hermes agents
+#   ./install-local-daemon.sh --antigravity        # also run Antigravity (agy) agents, UNSANDBOXED
+#   ./install-local-daemon.sh --no-antigravity     # stop running Antigravity agents
 #
-# A re-run keeps what the installed service already had: Hermes stays on and
-# the read paths stay the same unless you pass --no-hermes or set
+# A re-run keeps what the installed service already had: Hermes, Antigravity
+# and the read paths stay the same unless you pass a --no-* flag or set
 # CUMORA_AGENT_READ_PATHS. (Before, a bare re-run after an upstream sync
 # quietly switched Hermes off and reset the read paths to ~/Projects.)
 set -eu
@@ -46,21 +48,37 @@ read_paths=${CUMORA_AGENT_READ_PATHS:-$(installed CUMORA_AGENT_READ_PATHS)}
 read_paths=${read_paths:-$HOME/Projects}
 version=$(node -p "require('$repo/package.json').version")
 
-# --hermes: let this daemon drive the Hermes engine through its container
-# wrapper. Only Hermes is exempted from the sandbox requirement; Claude and
-# Codex agents keep theirs.
-case "${1:-}" in
-  --hermes) want_hermes=1 ;;
-  --no-hermes) want_hermes=0 ;;
-  '') if [ -n "$(installed CUMORA_HERMES_ACP_BIN)" ]; then want_hermes=1; else want_hermes=0; fi ;;
-  *) echo "用法：./install-local-daemon.sh [--hermes | --no-hermes | --uninstall]" >&2; exit 64 ;;
-esac
+# The daemon only runs engines it can sandbox (Claude, Codex). Anything else
+# has to be named in CUMORA_BYOA_ALLOW_UNSANDBOXED, one engine at a time;
+# Claude and Codex agents keep their sandbox either way.
+#   --hermes       Hermes, through its container wrapper (isolated by Docker).
+#   --antigravity  Google's agy CLI, straight on this Mac: it can read any
+#                  file you can, use the network and your logins.
+installed_unsandboxed=",$(installed CUMORA_BYOA_ALLOW_UNSANDBOXED),"
+if [ -n "$(installed CUMORA_HERMES_ACP_BIN)" ]; then want_hermes=1; else want_hermes=0; fi
+case "$installed_unsandboxed" in *,antigravity,*) want_antigravity=1 ;; *) want_antigravity=0 ;; esac
+for arg in "$@"; do
+  case "$arg" in
+    --hermes) want_hermes=1 ;;
+    --no-hermes) want_hermes=0 ;;
+    --antigravity) want_antigravity=1 ;;
+    --no-antigravity) want_antigravity=0 ;;
+    *) echo "用法：./install-local-daemon.sh [--hermes | --no-hermes] [--antigravity | --no-antigravity] | --uninstall" >&2; exit 64 ;;
+  esac
+done
+unsandboxed=
+[ "$want_hermes" = 1 ] && unsandboxed=hermes
+if [ "$want_antigravity" = 1 ]; then
+  command -v agy >/dev/null 2>&1 || { echo "找不到 agy：先安裝 Antigravity CLI，並執行一次 agy 登入" >&2; exit 1; }
+  unsandboxed=${unsandboxed:+$unsandboxed,}antigravity
+fi
+unsandboxed_env=
+[ -n "$unsandboxed" ] && unsandboxed_env="    <key>CUMORA_BYOA_ALLOW_UNSANDBOXED</key><string>$unsandboxed</string>"
 hermes_env=
 if [ "$want_hermes" = 1 ]; then
   hermes_bin="$(pwd)/hermes/hermes-acp-container"
   command -v docker >/dev/null 2>&1 || { echo "找不到 docker，Hermes 需要 OrbStack / Docker" >&2; exit 1; }
-  hermes_env="    <key>CUMORA_BYOA_ALLOW_UNSANDBOXED</key><string>hermes</string>
-    <key>CUMORA_HERMES_ACP_BIN</key><string>$hermes_bin</string>"
+  hermes_env="    <key>CUMORA_HERMES_ACP_BIN</key><string>$hermes_bin</string>"
   # hermes-acp-container's own knobs (model, image, …). launchd starts the
   # daemon with only the env written here, and the daemon hands its env to
   # the container script — so a knob set in the shell, or kept from the
@@ -119,6 +137,7 @@ cat > "$plist" <<PLIST
          start; same switch as test.sh. Engines inherit it, which only mutes
          that one warning. -->
     <key>NODE_OPTIONS</key><string>--disable-warning=DEP0205</string>
+$unsandboxed_env
 $hermes_env
   </dict>
 </dict></plist>
@@ -133,5 +152,8 @@ if [ -n "$hermes_env" ]; then
   [ -n "$hermes_knobs" ] && echo "Hermes 設定：$hermes_knobs"
 else
   echo "Hermes 引擎：未啟用；要開：./install-local-daemon.sh --hermes"
+fi
+if [ "$want_antigravity" = 1 ]; then
+  echo "Antigravity 引擎：已啟用，沒有沙盒（可讀全機檔案、可連網）；關掉：./install-local-daemon.sh --no-antigravity"
 fi
 echo "日誌：~/.cumora/daemon.log"

@@ -70,7 +70,7 @@ CUMORA_AGENT_READ_PATHS=~/code ./install-local-daemon.sh
 
 - **只能讀，不能寫。** 沙箱仍然把寫入限制在智能體自己的家目錄，實測在 `~/Projects` 下建檔會失敗。
 - **機密檔案一律擋掉。** `.env`、`*.pem`、`*.key`、`id_rsa*`、`.ssh/`、`.aws/`、`.npmrc` 這類檔案就算在開放目錄裡也讀不到（`engine.ts` 的 `SECRET_FILE_GLOBS`）。注意規則必須寫成 `//**/.env` 這種雙斜線形式，單斜線只比對工作目錄，模型用絕對路徑就會繞過。
-- **代價：不再自動更新。** 同步上游之後要重跑一次 `./install-local-daemon.sh`。重跑會沿用上次的設定：Hermes 的開關、可讀目錄、Hermes 的模型等設定都會保留，不用再帶一次參數。
+- **代價：不再自動更新。** 同步上游之後要重跑一次 `./install-local-daemon.sh`。重跑會沿用上次的設定：Hermes 和 Antigravity 的開關、可讀目錄、Hermes 的模型等設定都會保留，不用再帶一次參數。
 
 官方 npm 版常駐程式沒有這個設定，它唯一的放寬開關是 `CUMORA_BYOA_ALLOW_UNSANDBOXED=1`，那會整個關掉沙箱（模型可讀全機檔案、可連網），不建議用。
 
@@ -92,6 +92,24 @@ CUMORA_HERMES_MODEL=qwen3.8-27b ./install-local-daemon.sh
 ```
 
 可用的設定有 `CUMORA_HERMES_MODEL`、`CUMORA_HERMES_IMAGE`、`CUMORA_HERMES_BASE_URL`、`CUMORA_HERMES_CONTEXT`、`CUMORA_HERMES_REASONING`、`CUMORA_HERMES_MIGRATE`，說明見 [hermes/README.md](hermes/README.md)。
+
+## Antigravity（Gemini）智能體
+
+個人 Google 帳號已經不能用 Gemini CLI 的「Sign in with Google」（Google 要個人用戶改用 Antigravity），要用 Gemini 就改用 Antigravity CLI（`agy`）：
+
+```bash
+curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh   # 先看過再執行
+bash /tmp/agy-install.sh        # 裝到 ~/.local/bin/agy
+agy                             # 用 Google 帳號登入一次
+./install-local-daemon.sh --antigravity      # 開啟（之後重跑會保留）
+./install-local-daemon.sh --no-antigravity   # 關掉
+```
+
+開啟後，在智能體的編輯視窗把「引擎」改成 Antigravity。
+
+- **沒有沙箱。** 常駐程式只會用它能套上沙箱的引擎（Claude Code、Codex）；其他引擎要一個一個列進 `CUMORA_BYOA_ALLOW_UNSANDBOXED` 才會出現，沒列的連偵測都不會顯示。Antigravity 直接跑在 Mac 上，可以讀你能讀的任何檔案（包括 `~/.ssh`、各種登入資料）、可以連網。Hermes 也在這份清單上，但它跑在容器裡，實際上碰不到 Mac 的檔案。
+- **只給需要的智能體用。** 智能體會讀群組訊息、郵件和網頁，有人在裡面藏指令時，沒有沙箱的引擎能造成的傷害比較大。建議只讓少數智能體（例如做研究的）用 Antigravity，其他的留在 Codex 或 Claude Code。
+- 安裝程式會在 `~/.zshrc` 和 `~/.zprofile` 尾端加一行 `export PATH=…/.local/bin:$PATH`；`~/.local/bin` 原本就在 PATH 裡的話，這行是重複的，可以刪。
 
 ## 日常操作
 
