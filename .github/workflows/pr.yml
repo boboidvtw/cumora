@@ -151,6 +151,9 @@ jobs:
       - run: npm ci
       - name: Biome lint
         run: npm run lint
+      # zh-TW fork: untranslated UI text an upstream merge brings in.
+      - name: i18n leftovers
+        run: npm run i18n:scan
 
   typecheck:
     name: Typecheck
