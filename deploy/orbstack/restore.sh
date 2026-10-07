@@ -3,6 +3,8 @@
 #
 #   ./restore.sh                      # the newest backup
 #   ./restore.sh <backup folder>      # a specific one (cumora-YYYYMMDD-HHMMSS)
+#   ./restore.sh <file>.tar.xz.enc    # an encrypted off-site copy (decrypted
+#                                     # with the Keychain passphrase first)
 #   ./restore.sh --list               # show the backups it can see
 #
 # What it does, in order:
@@ -30,11 +32,14 @@ project=${COMPOSE_PROJECT_NAME:-cumora}
 uploads_volume="${project}_uploads"
 plist="$HOME/Library/LaunchAgents/ai.cumora.backup.plist"
 safety_dir=${CUMORA_PRE_RESTORE_DIR:-$HOME/.cumora/pre-restore}
+. ./offsite-crypto.sh
 
 fail() { echo "還原失敗：$*" >&2; exit 1; }
 
 scheduled_dir=$( [ -f "$plist" ] && /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:CUMORA_BACKUP_DIR" "$plist" 2>/dev/null || true)
 dirs="${CUMORA_BACKUP_DIR:-${scheduled_dir:-$HOME/.cumora/backups}}"
+scheduled_offsite=$( [ -f "$plist" ] && /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:CUMORA_BACKUP_OFFSITE_DIR" "$plist" 2>/dev/null || true)
+offsite="${CUMORA_BACKUP_OFFSITE_DIR:-$scheduled_offsite}"
 [ "$dirs" = "$HOME/.cumora/backups" ] || dirs="$dirs
 $HOME/.cumora/backups"
 
@@ -52,11 +57,32 @@ case "${1:-}" in
     list_backups | while IFS= read -r b; do
       printf '%s  %s%s\n' "$(du -sh "$b" | cut -f1)" "$b" "$([ -f "$b/env" ] && echo '' || echo '  （沒有 env）')"
     done
+    if [ -n "$offsite" ]; then
+      for f in "$offsite"/cumora-*.tar.xz.enc; do
+        [ -f "$f" ] && printf '%s  %s  （加密異地副本）\n' "$(du -h "$f" | cut -f1)" "$f"
+      done
+    fi
     exit 0
     ;;
-  -*) echo "用法：./restore.sh [備份資料夾 | --list]" >&2; exit 64 ;;
+  -*) echo "用法：./restore.sh [備份資料夾 | 加密檔.tar.xz.enc | --list]" >&2; exit 64 ;;
   '') backup=$(list_backups | tail -n 1); [ -n "$backup" ] || fail "找不到任何備份（找過：$(printf '%s' "$dirs" | tr '\n' ' ')）" ;;
   *) backup=${1%/} ;;
+esac
+
+# An encrypted off-site copy: decrypt it into a private scratch folder and
+# carry on as if it were a backup folder.
+case "$backup" in
+  *.tar.xz.enc)
+    [ -f "$backup" ] || fail "找不到 $backup"
+    mkdir -p "$HOME/.cumora"
+    scratch=$(mktemp -d "$HOME/.cumora/restore-XXXXXX")
+    chmod 700 "$scratch"
+    trap 'rm -rf "$scratch"' EXIT
+    offsite_decrypt < "$backup" | tar -C "$scratch" -xJf - \
+      || fail "解不開 $backup（鑰匙圈裡的 $OFFSITE_KEYCHAIN_SERVICE 密碼對嗎？）"
+    backup="$scratch/$(basename "$backup" .tar.xz.enc)"
+    echo "已解密：$backup"
+    ;;
 esac
 
 [ -f "$backup/db.sql.gz" ] && [ -f "$backup/uploads.tar.gz" ] || fail "$backup 不是完整的備份（要有 db.sql.gz 和 uploads.tar.gz）"
@@ -90,7 +116,7 @@ fi
 
 # 3. Safety backup of the current state
 before=$(ls -1d "$safety_dir"/cumora-* 2>/dev/null | tail -n 1 || true)
-CUMORA_BACKUP_DIR="$safety_dir" CUMORA_BACKUP_KEEP=5 ./backup.sh || fail "還原前的備份失敗，沒有改動任何東西"
+CUMORA_BACKUP_DIR="$safety_dir" CUMORA_BACKUP_KEEP=5 CUMORA_BACKUP_OFFSITE_DIR= ./backup.sh || fail "還原前的備份失敗，沒有改動任何東西"
 safety=$(ls -1d "$safety_dir"/cumora-* | tail -n 1)
 [ "$safety" != "$before" ] || fail "找不到剛做好的還原前備份，沒有改動任何東西"
 

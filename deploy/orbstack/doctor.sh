@@ -161,9 +161,24 @@ else
     else warn "最新備份是 $(( age / 24 )) 天前：$newest（看 ~/.cumora/backup.log）"; fi
     [ -f "$newest/env" ] || warn "最新備份裡沒有 .env 的副本"
   fi
-  case "$dir" in
-    "$HOME"/Downloads/*|"$HOME"/.cumora/*) warn "備份跟資料在同一顆硬碟（$dir），防不了硬碟壞掉" ;;
-  esac
+  offsite=$(plist_env "$backup_plist" CUMORA_BACKUP_OFFSITE_DIR)
+  if [ -n "$offsite" ]; then
+    latest=$(ls -1 "$offsite"/cumora-*.tar.xz.enc 2>/dev/null | tail -n 1)
+    if [ -z "$latest" ]; then
+      warn "已設定加密異地副本（$offsite），但還沒有任何一份（下次 03:30 會產生，或先跑 ./backup.sh）"
+    else
+      taken=$(date -j -f %Y%m%d-%H%M%S "$(basename "$latest" .tar.xz.enc | sed 's/^cumora-//')" +%s 2>/dev/null || echo 0)
+      age=$(( ($(date +%s) - taken) / 3600 ))
+      if [ "$age" -lt 48 ]; then ok "加密異地副本 $age 小時前：$latest"
+      else warn "加密異地副本是 $(( age / 24 )) 天前：$latest（看 ~/.cumora/backup.log）"; fi
+    fi
+    security find-generic-password -s cumora-backup -a "$(id -un)" >/dev/null 2>&1 \
+      || bad "鑰匙圈裡沒有 cumora-backup 加密密碼，異地副本會做不出來"
+  else
+    case "$dir" in
+      "$HOME"/Downloads/*|"$HOME"/.cumora/*) warn "備份跟資料在同一顆硬碟（$dir），防不了硬碟壞掉（設定 CUMORA_BACKUP_OFFSITE_DIR，見 README）" ;;
+    esac
+  fi
 fi
 
 section "上游"

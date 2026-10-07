@@ -13,6 +13,13 @@
 #
 #   CUMORA_BACKUP_DIR    where backups go (default ~/.cumora/backups)
 #   CUMORA_BACKUP_KEEP   how many to keep (default 14; older ones are deleted)
+#   CUMORA_BACKUP_OFFSITE_DIR   also write an encrypted copy here, e.g. a
+#                        Google Drive for desktop folder (see offsite-crypto.sh)
+#   CUMORA_BACKUP_OFFSITE_KEEP  how many encrypted copies to keep (default 30)
+#
+# The off-site copy is written after the local backup is complete and is
+# checked by decrypting it again before it gets its final name. If it fails,
+# the local backup still counts; you get a notification instead.
 #
 # Redis is not backed up: it holds queues and short-lived state that the
 # server rebuilds.
@@ -26,6 +33,9 @@ export PATH
 
 dest=${CUMORA_BACKUP_DIR:-$HOME/.cumora/backups}
 keep=${CUMORA_BACKUP_KEEP:-14}
+offsite=${CUMORA_BACKUP_OFFSITE_DIR:-}
+offsite_keep=${CUMORA_BACKUP_OFFSITE_KEEP:-30}
+. "$here/offsite-crypto.sh"
 label=ai.cumora.backup
 plist="$HOME/Library/LaunchAgents/$label.plist"
 log="$HOME/.cumora/backup.log"
@@ -33,6 +43,13 @@ log="$HOME/.cumora/backup.log"
 case "${1:-}" in
   --install)
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.cumora"
+    offsite_env=
+    if [ -n "$offsite" ]; then
+      case "$offsite" in *[\<\>\&]*) echo "CUMORA_BACKUP_OFFSITE_DIR 不能含 < > &" >&2; exit 64 ;; esac
+      offsite_passphrase >/dev/null || { echo "鑰匙圈裡沒有 $OFFSITE_KEYCHAIN_SERVICE 密碼，見 offsite-crypto.sh" >&2; exit 1; }
+      offsite_env="    <key>CUMORA_BACKUP_OFFSITE_DIR</key><string>$offsite</string>
+    <key>CUMORA_BACKUP_OFFSITE_KEEP</key><string>$offsite_keep</string>"
+    fi
     cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -52,6 +69,7 @@ case "${1:-}" in
     <key>HOME</key><string>$HOME</string>
     <key>CUMORA_BACKUP_DIR</key><string>$dest</string>
     <key>CUMORA_BACKUP_KEEP</key><string>$keep</string>
+$offsite_env
   </dict>
 </dict></plist>
 PLIST
@@ -59,6 +77,7 @@ PLIST
     launchctl load "$plist"
     echo "已設定每天 03:30 自動備份（Mac 當時在睡眠的話，醒來後補跑）。"
     echo "備份位置：$dest（保留最近 $keep 份）"
+    [ -z "$offsite" ] || echo "加密異地副本：$offsite（保留最近 $offsite_keep 份）"
     echo "日誌：$log"
     exit 0
     ;;
@@ -143,3 +162,27 @@ fi
 
 size=$(du -sh "$dest/$name" | cut -f1)
 echo "$(stamp) 備份完成：$dest/$name（$size），保留最近 $keep 份"
+
+# Off-site copy: one encrypted file next to the others in $offsite.
+[ -n "$offsite" ] || exit 0
+offsite_fail() {
+  echo "$(stamp) 異地備份失敗：$*（本機備份 $dest/$name 已完成）" >&2
+  notify "Cumora 異地備份失敗" "$*。本機備份已完成，詳情：~/.cumora/backup.log"
+  exit 1
+}
+mkdir -p "$offsite" || offsite_fail "建立不了 $offsite"
+enc="$offsite/$name.tar.xz.enc"
+part="$offsite/.$name.tar.xz.enc.partial"
+trap 'rm -f "$part"' EXIT
+tar -C "$dest" -cJf - "$name" | offsite_encrypt > "$part" || offsite_fail "加密失敗（鑰匙圈裡有 $OFFSITE_KEYCHAIN_SERVICE 密碼嗎？）"
+offsite_decrypt < "$part" | tar -tJf - >/dev/null || offsite_fail "加密檔驗證失敗"
+mv "$part" "$enc"
+trap - EXIT
+
+count=$(ls -1 "$offsite"/cumora-*.tar.xz.enc 2>/dev/null | wc -l | tr -d ' ')
+if [ "$count" -gt "$offsite_keep" ]; then
+  ls -1 "$offsite"/cumora-*.tar.xz.enc | head -n $((count - offsite_keep)) | while read -r old; do
+    rm -f "$old"
+  done
+fi
+echo "$(stamp) 異地副本完成：$enc（$(du -h "$enc" | cut -f1)），保留最近 $offsite_keep 份"

@@ -128,7 +128,7 @@ docker compose start              # 再啟動
 ./doctor.sh
 ```
 
-它只讀不改、不印出任何密鑰，一次看完：`.env`、三個容器和網址、常駐程式有沒有在跑和連上伺服器、有沒有智能體一直跑不起來（例如 Claude Code 登入過期，會附上重新登入的方法）、LM Studio 和 Hermes 映像、最新備份是多久以前、zh-tw 有沒有落後上游、GitHub CI 的結果。每一項標 ✓（正常）、!（值得看一下）或 ✗（壞了，後面附修法），有 ✗ 時結束碼為 1。
+它只讀不改、不印出任何密鑰，一次看完：`.env`、三個容器和網址、常駐程式有沒有在跑和連上伺服器、有沒有智能體一直跑不起來（例如 Claude Code 登入過期，會附上重新登入的方法）、LM Studio 和 Hermes 映像、最新備份和加密異地副本是多久以前、zh-tw 有沒有落後上游、GitHub CI 的結果。每一項標 ✓（正常）、!（值得看一下）或 ✗（壞了，後面附修法），有 ✗ 時結束碼為 1。
 
 ### 跑測試
 
@@ -154,7 +154,23 @@ docker compose start              # 再啟動
 
 - 換位置：`CUMORA_BACKUP_DIR=/Volumes/外接碟/cumora ./backup.sh --install`。預設位置和資料在同一顆硬碟上，防得了誤刪、防不了硬碟壞掉；放到外接碟或雲端同步資料夾比較保險。外接碟在備份時沒接上的話，那次會先備份到 `~/.cumora/backups`，並跳出通知，不會整天沒備份。
 - 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。
-- `env` 裡有密鑰（資料庫密碼、`AGENT_RUNTIME_SECRET`、GitHub OAuth secret），所以備份資料夾只有你自己能讀。要放到雲端同步資料夾的話，記得這點。
+- `env` 裡有密鑰（資料庫密碼、`AGENT_RUNTIME_SECRET`、GitHub OAuth secret），所以備份資料夾只有你自己能讀。不要把備份資料夾直接放進雲端同步資料夾，改用下面的加密異地副本。
+
+**加密異地副本（例如 Google Drive）**：本機備份做完後，再把它加密成一個 `cumora-<日期時間>.tar.xz.enc`，放進雲端同步資料夾，由 Google Drive for desktop 上傳。加密用 AES-256，密碼放在鑰匙圈（服務名稱 `cumora-backup`），不會寫進任何檔案；寫完會先解密驗證一次才改成正式檔名。異地這一步失敗時會跳通知，本機那份照樣算數。
+
+```bash
+# 第一次：在鑰匙圈產生一組隨機密碼（不會顯示）
+security add-generic-password -s cumora-backup -a "$(id -un)" -l "Cumora backup encryption" -w "$(openssl rand -base64 32)"
+# 設定每日備份同時寫異地副本（CUMORA_BACKUP_DIR 要帶上現在的位置，否則會變回預設）
+CUMORA_BACKUP_DIR=~/Downloads/cumora-backups \
+CUMORA_BACKUP_OFFSITE_DIR="$HOME/Library/CloudStorage/GoogleDrive-<帳號>/我的雲端硬碟/cumora-backups" \
+  ./backup.sh --install
+```
+
+- **密碼一定要另存一份在這台 Mac 以外的地方**（iCloud 鑰匙圈、密碼管理器）。Mac 壞掉時鑰匙圈也一起沒了，沒有密碼就打不開雲端上的副本。取出密碼：`security find-generic-password -s cumora-backup -w`。
+- 換一台 Mac 還原時，先用同一個服務名稱把密碼存進那台的鑰匙圈（上面第一行，把 `$(openssl rand …)` 換成你存下來的密碼），再跑 `./restore.sh <檔案>.tar.xz.enc`。
+- 預設保留最近 30 份，用 `CUMORA_BACKUP_OFFSITE_KEEP` 改。第一次讓 launchd 寫進 Google Drive 時，macOS 可能會問要不要允許存取，按允許。
+- `./doctor.sh` 會顯示最新一份異地副本是多久以前，以及鑰匙圈裡的密碼還在不在。
 
 **還原**：
 
@@ -162,11 +178,12 @@ docker compose start              # 再啟動
 ./restore.sh --list                         # 看有哪些備份
 ./restore.sh                                # 還原最新的一份
 ./restore.sh ~/Downloads/cumora-backups/cumora-<日期時間>   # 還原指定的一份
+./restore.sh <異地資料夾>/cumora-<日期時間>.tar.xz.enc        # 從加密異地副本還原
 ```
 
 它會先問你，要輸入 `restore` 才會動手。動手前會把目前的狀態另外備份到 `~/.cumora/pre-restore`（保留 5 份，跟每日備份分開，所以不會被它的保留份數刪掉），還原完會印出「回到還原前」的指令；還原錯了，照著跑就能回去。接著停伺服器、換掉資料庫和上傳檔案（上傳檔案會先清空，結果跟備份一模一樣），再啟動伺服器並等它恢復正常。
 
-它會在每日備份寫入的位置找備份（`./backup.sh --install` 設定的 `CUMORA_BACKUP_DIR`），也會找 `~/.cumora/backups`（外接碟沒接上時的備份落在這裡）。
+它會在每日備份寫入的位置找備份（`./backup.sh --install` 設定的 `CUMORA_BACKUP_DIR`），也會找 `~/.cumora/backups`（外接碟沒接上時的備份落在這裡）；`--list` 另外列出異地資料夾裡的加密副本。加密副本會先用鑰匙圈的密碼解密到 `~/.cumora` 底下的暫存資料夾，結束後自動刪除。
 
 **`.env` 不見了**：資料庫密碼和 `AGENT_RUNTIME_SECRET` 已經寫進資料裡，不能重新產生，`./up.sh` 也會拒絕產生新的。直接跑 `./restore.sh`：`.env` 不在時，它會先從備份放回來（就算你在確認時取消，`.env` 也已經回來了）。`.env` 還在的話會保留目前的，只在跟備份不同時提醒是哪幾個鍵。
 
