@@ -9,6 +9,10 @@ name: PR
 on:
   pull_request:
     branches: [main]
+  # zh-TW self-host fork: the same checks on every push to its main line,
+  # which otherwise had no CI at all (tests only ran locally via test.sh).
+  push:
+    branches: [zh-tw]
 
 # Cancel superseded runs on the same PR — saves CI minutes when you
 # push twice in a row.
