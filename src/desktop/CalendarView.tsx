@@ -24,7 +24,8 @@ import { useMe } from '@/stores/auth'
 import { Avatar } from '@/components/Avatar'
 import { IPlus, ICalendar, IClock, IRepeat, ITrash } from '@/components/icons'
 import { EventEditor, type EventEditorPrefill } from '@/components/EventEditor'
-import { useT } from '@/lib/i18n'
+import { useLocale, useT } from '@/lib/i18n'
+import { weekRangeLabel } from '@/lib/calendar-range-label'
 import { cn } from '@/lib/utils'
 import { nextOccurrenceOnOrAfter } from '@/lib/recurrence'
 import type { CalendarEvent, RecurrenceRule } from '@/types'
@@ -630,22 +631,17 @@ export function CalendarView() {
   }
   const goToday = () => setCursor(new Date())
 
+  const locale = useLocale()
   const headerLabel = useMemo(() => {
     if (mode === 'month') {
-      return cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      return cursor.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
     }
     if (mode === 'week') {
       const ws = startOfWeek(cursor)
-      const we = addDays(ws, 6)
-      const sameMonth = ws.getMonth() === we.getMonth()
-      const left = ws.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-      const right = sameMonth
-        ? we.toLocaleDateString(undefined, { day: 'numeric', year: 'numeric' })
-        : we.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-      return `${left} – ${right}`
+      return weekRangeLabel(ws, addDays(ws, 6), locale)
     }
-    return cursor.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-  }, [cursor.getTime(), mode])
+    return cursor.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  }, [cursor.getTime(), mode, locale])
 
   // Agenda panel: next 30 days starting from today (unaffected by cursor
   // navigation, matching macOS Calendar's "Upcoming" sidebar behavior).
