@@ -48,6 +48,9 @@ permissions:
 
 jobs:
   bench:
+    # Upstream's production secrets/runners only exist on yetone/cumora; on a
+    # fork whose default branch carries this file, the cron would fail daily.
+    if: github.repository == 'yetone/cumora'
     runs-on: [self-hosted, cumora-bench]
     timeout-minutes: 120
     steps:

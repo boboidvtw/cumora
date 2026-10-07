@@ -13,6 +13,9 @@ permissions:
 jobs:
   authenticated-readback:
     name: Authenticated production paths
+    # Upstream's production secrets/runners only exist on yetone/cumora; on a
+    # fork whose default branch carries this file, the cron would fail daily.
+    if: github.repository == 'yetone/cumora'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production-readback
