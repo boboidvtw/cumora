@@ -73,6 +73,51 @@ if [ -n "$label" ]; then
   [ -f "$HOME/.cumora/computer.json" ] || bad "這台 Mac 沒有配對紀錄（./pair.sh）"
 fi
 
+# Agents whose latest run failed and that haven't replied since. The daemon
+# can be up and connected while every turn dies on an expired engine login.
+if [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; then
+  if stuck=$(docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -AtF "	" -v ON_ERROR_STOP=1' 2>/dev/null <<'SQL'
+with failed as (
+  select distinct on (author_id) author_id, created_at, body::json->>'text' as text
+  from messages
+  where kind = 'system' and body like '%"noticeKind":"byoa_engine_failed"%'
+  order by author_id, created_at desc
+), replied as (
+  select author_id, max(created_at) as at from messages where kind = 'text' group by author_id
+)
+select coalesce(p.name, f.author_id), extract(epoch from f.created_at)::bigint,
+       coalesce(nullif(split_part(f.text, E'\n', 2), ''), split_part(f.text, E'\n', 1))
+from failed f
+left join replied r using (author_id)
+left join participants p on p.id = f.author_id
+where r.at is null or f.created_at > r.at
+order by 1;
+SQL
+  ); then
+    if [ -z "$stuck" ]; then
+      ok "智能體最近沒有執行失敗"
+    else
+      # One line per distinct reason: newest failure time, names, reason.
+      grouped=$(printf '%s\n' "$stuck" | awk -F '\t' '{ n[$3] = n[$3] (n[$3] ? "、" : "") $1; if ($2 > t[$3]) t[$3] = $2 }
+        END { for (r in n) printf "%s\t%s\t%s\n", t[r], n[r], r }')
+      tab=$(printf '\t')
+      while IFS="$tab" read -r at names reason; do
+        bad "$names 跑不起來（最後一次 $(date -r "$at" '+%m/%d %H:%M')）：$reason"
+        case "$reason" in
+          *uthenticat*|*OAuth*|*login*|*"log in"*)
+            printf '    → 在這台 Mac 的終端機執行 claude，輸入 /login 重新登入，再到對話裡叫它一次\n' ;;
+          *quota*|*credit*|*"rate limit"*|*"usage limit"*)
+            printf '    → 額度用完了：等額度恢復或加值，再到對話裡叫它一次\n' ;;
+        esac
+      done <<GROUPED
+$grouped
+GROUPED
+    fi
+  else
+    warn "查不到智能體的執行紀錄（資料庫沒有回應？）"
+  fi
+fi
+
 section "本機模型（LM Studio）"
 lm=$(sed -n 's/^LOCAL_LLM_BASE_URL=//p' .env 2>/dev/null)
 lm=${lm:-http://host.docker.internal:1234/v1}
@@ -137,7 +182,7 @@ fi
 remote=$(git -C "$repo" remote get-url origin 2>/dev/null | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')
 if command -v gh >/dev/null 2>&1 && [ -n "$remote" ]; then
   ci=$(gh run list --repo "$remote" --workflow pr.yml --branch zh-tw --limit 1 \
-    --json status,conclusion,headSha,url --jq '.[0] | "\(.status) \(.conclusion) \(.headSha[0:7]) \(.url)"' 2>/dev/null || true)
+    --json status,conclusion,headSha,url --jq '.[0] | "\(.status) \(.conclusion | if . == "" or . == null then "-" else . end) \(.headSha[0:7]) \(.url)"' 2>/dev/null || true)
   head=$(git -C "$repo" rev-parse --short=7 zh-tw 2>/dev/null)
   set -- $ci
   case "${1:-}" in
