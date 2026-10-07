@@ -6,7 +6,7 @@
 #
 # ✓ fine · ! worth a look · ✗ broken. Exits 1 when anything is ✗.
 set -u
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 PATH="$HOME/.orbstack/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 export PATH
@@ -75,10 +75,12 @@ fi
 
 # Agents whose latest run failed and that haven't replied since. The daemon
 # can be up and connected while every turn dies on an expired engine login.
+# A failure on an engine the agent has since been moved off is not counted.
 if [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; then
   if stuck=$(docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -AtF "	" -v ON_ERROR_STOP=1' 2>/dev/null <<'SQL'
 with failed as (
-  select distinct on (author_id) author_id, created_at, body::json->>'text' as text
+  select distinct on (author_id) author_id, created_at, body::json->>'text' as text,
+         substring(body::json->>'text' from 'could not run on local ([A-Za-z0-9_-]+):') as engine
   from messages
   where kind = 'system' and body like '%"noticeKind":"byoa_engine_failed"%'
   order by author_id, created_at desc
@@ -86,26 +88,33 @@ with failed as (
   select author_id, max(created_at) as at from messages where kind = 'text' group by author_id
 )
 select coalesce(p.name, f.author_id), extract(epoch from f.created_at)::bigint,
-       coalesce(nullif(split_part(f.text, E'\n', 2), ''), split_part(f.text, E'\n', 1))
+       coalesce(nullif(split_part(f.text, E'\n', 2), ''), split_part(f.text, E'\n', 1)),
+       coalesce(f.engine, '')
 from failed f
 left join replied r using (author_id)
 left join participants p on p.id = f.author_id
-where r.at is null or f.created_at > r.at
+where (r.at is null or f.created_at > r.at)
+  and (f.engine is null or p.engine is null or p.engine_inherit or p.engine = f.engine)
 order by 1;
 SQL
   ); then
     if [ -z "$stuck" ]; then
       ok "智能體最近沒有執行失敗"
     else
-      # One line per distinct reason: newest failure time, names, reason.
-      grouped=$(printf '%s\n' "$stuck" | awk -F '\t' '{ n[$3] = n[$3] (n[$3] ? "、" : "") $1; if ($2 > t[$3]) t[$3] = $2 }
-        END { for (r in n) printf "%s\t%s\t%s\n", t[r], n[r], r }')
+      # One line per distinct engine + reason: newest failure time, names.
+      grouped=$(printf '%s\n' "$stuck" | awk -F '\t' '{ k = $4 "\t" $3; n[k] = n[k] (n[k] ? "、" : "") $1; if ($2 > t[k]) t[k] = $2 }
+        END { for (k in n) printf "%s\t%s\t%s\n", t[k], n[k], k }')
       tab=$(printf '\t')
-      while IFS="$tab" read -r at names reason; do
-        bad "$names 跑不起來（最後一次 $(date -r "$at" '+%m/%d %H:%M')）：$reason"
+      while IFS="$tab" read -r at names engine reason; do
+        bad "$names 跑不起來（${engine:+$engine 引擎，}最後一次 $(date -r "$at" '+%m/%d %H:%M')）：$reason"
         case "$reason" in
           *uthenticat*|*OAuth*|*login*|*"log in"*)
-            printf '    → 在這台 Mac 的終端機執行 claude，輸入 /login 重新登入，再到對話裡叫它一次\n' ;;
+            case "$engine" in
+              codex) printf '    → 在這台 Mac 的終端機執行 codex login 重新登入，再到對話裡叫它一次\n' ;;
+              antigravity) printf '    → 在這台 Mac 的終端機執行 agy 重新登入，再到對話裡叫它一次\n' ;;
+              claude|'') printf '    → 在這台 Mac 的終端機執行 claude，輸入 /login 重新登入，再到對話裡叫它一次\n' ;;
+              *) printf '    → 在這台 Mac 重新登入 %s，再到對話裡叫它一次\n' "$engine" ;;
+            esac ;;
           *quota*|*credit*|*"rate limit"*|*"usage limit"*)
             printf '    → 額度用完了：等額度恢復或加值，再到對話裡叫它一次\n' ;;
         esac
