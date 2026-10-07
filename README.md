@@ -1,4 +1,4 @@
-> **這是 [yetone/cumora](https://github.com/yetone/cumora) 的繁體中文（台灣）自架分支，分支 `zh-tw`。**
+> **這是 [yetone/cumora](https://github.com/yetone/cumora) 的繁體中文（台灣）自架分支，分支 `zh-tw`。** [![CI](https://github.com/boboidvtw/cumora/actions/workflows/pr.yml/badge.svg?branch=zh-tw)](https://github.com/boboidvtw/cumora/actions/workflows/pr.yml?query=branch%3Azh-tw)
 > 介面全繁中、只用 BYOA（智能體跑在你自己的 Mac 上，可搭配本機 LM Studio 和 Hermes 引擎）、用 OrbStack 一鍵架設，
 > 附每日備份、一鍵還原和健康檢查。從 [`deploy/orbstack/README.md`](deploy/orbstack/README.md) 開始；以下是上游原文。
 
