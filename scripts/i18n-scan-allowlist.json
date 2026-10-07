@@ -248,6 +248,10 @@
     "text": "messages"
   },
   {
+    "file": "src/components/Message.tsx",
+    "text": "text"
+  },
+  {
     "file": "src/components/RichInput.tsx",
     "text": "/everyone.png"
   },
@@ -338,18 +342,6 @@
   {
     "file": "src/desktop/MeView.tsx",
     "text": "fast:"
-  },
-  {
-    "file": "src/desktop/MeView.tsx",
-    "text": "me.statLed"
-  },
-  {
-    "file": "src/desktop/MeView.tsx",
-    "text": "me.statNoise"
-  },
-  {
-    "file": "src/desktop/MeView.tsx",
-    "text": "me.statPulled"
   },
   {
     "file": "src/desktop/MeView.tsx",

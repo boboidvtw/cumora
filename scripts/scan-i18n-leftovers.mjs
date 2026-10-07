@@ -9,6 +9,7 @@
  *     attr:<x>   string props that render (placeholder, title, aria-label…)
  *     literal    prose-looking string literals outside t()/tLabel()/console/…
  *     template   prose-looking template strings outside t()
+ *     jsx-word   a single word rendered straight into JSX ({x ? 'agent' : 'human'})
  *
  * It is a heuristic. Reviewed false positives (CSS classes, CLI commands,
  * English data tables that already have a parallel *_KEY lookup, …) live in
@@ -59,6 +60,18 @@ function insideNonUiContext(node) {
   return false
 }
 
+/** A string that becomes a JSX child as is — `{label}`, `{a ? 'x' : 'y'}`,
+ *  `{name || 'unknown'}` — renders even when it is one short word. */
+function renderedAsJsxChild(node) {
+  let n = node
+  while (n.parent && (ts.isConditionalExpression(n.parent) || ts.isParenthesizedExpression(n.parent) ||
+    (ts.isBinaryExpression(n.parent) && /^(\|\||\?\?)$/.test(n.parent.operatorToken.getText())))) {
+    if (ts.isConditionalExpression(n.parent) && n.parent.condition === n) return false
+    n = n.parent
+  }
+  return Boolean(n.parent && ts.isJsxExpression(n.parent) && n.parent.parent && !ts.isJsxAttribute(n.parent.parent))
+}
+
 const hits = []
 
 function report(sf, node, kind, text) {
@@ -75,10 +88,11 @@ function scanFile(file) {
     } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
       const name = node.name.getText()
       const s = node.initializer.text
-      if (!skipAttr(name) && /[A-Za-z]{2,}/.test(s) && !isBrand(s) && (VISIBLE_ATTRS.has(name) || isProse(s))) report(sf, node, `attr:${name}`, s)
+      if (!skipAttr(name) && !isMessageKey(s) && /[A-Za-z]{2,}/.test(s) && !isBrand(s) && (VISIBLE_ATTRS.has(name) || isProse(s))) report(sf, node, `attr:${name}`, s)
     } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && !ts.isJsxAttribute(node.parent)) {
       const s = node.text
       if (!isMessageKey(s) && isProse(s) && !isBrand(s) && !/^[\w-]+(\/[\w.-]+)+$/.test(s) && !/[{}<>=;]|^\.|https?:/.test(s) && !insideNonUiContext(node)) report(sf, node, 'literal', s)
+      else if (/^[A-Za-z][A-Za-z ]+$/.test(s.trim()) && !isBrand(s) && renderedAsJsxChild(node)) report(sf, node, 'jsx-word', s)
     } else if (ts.isTemplateExpression(node) && !insideNonUiContext(node)) {
       const s = [node.head.text, ...node.templateSpans.map((x) => x.literal.text)].join(' ')
       if (isProse(s) && !/[{}<>=;]|https?:/.test(s)) report(sf, node, 'template', node.getText())
