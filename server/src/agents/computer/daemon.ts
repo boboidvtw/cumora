@@ -1494,7 +1494,7 @@ export function prependAgentBinToPath(binDir: string, currentPath = process.env.
 export function engineProcessPath(
   binDir: string,
   currentPath = process.env.PATH ?? '',
-  unsandboxed = allowUnsandboxedByoa(),
+  unsandboxed: boolean,
 ): string {
   if (unsandboxed) return prependAgentBinToPath(binDir, currentPath)
   const writableHome = resolve(dirname(binDir))
@@ -2060,7 +2060,7 @@ export class AgentRunner {
 
   async start(): Promise<void> {
     await this.adapter.seedHome(this.home, { id: this.agent.id, name: this.agent.name, role: this.agent.role, systemPrompt: this.agent.systemPrompt })
-    if (allowUnsandboxedByoa()) await writeShim(this.binDir)
+    if (this.unsandboxed()) await writeShim(this.binDir)
     await writeShim(this.trustedCliDir)
     // Versions before the broker stored a live bearer token beside the shim.
     // Remove it before any new engine process can inspect the old home.
@@ -2242,7 +2242,7 @@ export class AgentRunner {
   private engineEnv(): NodeJS.ProcessEnv {
     const env = {
       ...process.env,
-      PATH: engineProcessPath(this.binDir),
+      PATH: engineProcessPath(this.binDir, process.env.PATH ?? '', this.unsandboxed()),
       CUMORA_AGENT_IPC_DIR: this.ipcDir,
       CUMORA_AGENT_MCP_SHIM: join(this.trustedCliDir, 'cumora-mcp'),
       CUMORA_AGENT_ID: this.agent.id,
@@ -2647,9 +2647,15 @@ export class AgentRunner {
    *  agenda turns; the per-turn deltas (chatDelta / agendaDelta) carry only the
    *  dynamic bits. No game-specific rules — the engine coordinates in-turn via the
    *  shared glance-yield protocol, exactly like the cloud pod-agent. */
+  /** Is THIS agent's engine opted out of the sandbox? The opt-in is a list
+   *  of engines, so a Hermes opt-in must not loosen a Claude or Codex agent. */
+  private unsandboxed(): boolean {
+    return allowUnsandboxedByoa(process.env, this.engine)
+  }
+
   /** Which calling convention this agent's turns actually have. */
   private promptSurface(): ActionSurface {
-    return actionSurfaceFor(allowUnsandboxedByoa())
+    return actionSurfaceFor(this.unsandboxed())
   }
 
   private standingPrompt(): string {
@@ -3448,6 +3454,7 @@ function installTimestampedLogging(): void {
 
 async function doRun(serverOverride?: string): Promise<void> {
   installTimestampedLogging()
+  // any opt-in: the startup warning lists every engine that is out of the sandbox.
   if (allowUnsandboxedByoa()) {
     const scope = unsandboxedByoaEngines()
     const which = scope === 'all' ? '=1 — local model engines' : `=${[...scope].join(',')} — these engines`
@@ -3524,7 +3531,7 @@ async function doRun(serverOverride?: string): Promise<void> {
       const provider = profiles.find((p) => p.id === agent.providerProfile)
       // A bound profile must never fall through to another engine or account.
       const engine = agent.providerProfile
-        ? (provider && !allowUnsandboxedByoa() && agent.engine === 'claude' && available.includes('claude') ? 'claude' : null)
+        ? (provider && !allowUnsandboxedByoa(process.env, 'claude') && agent.engine === 'claude' && available.includes('claude') ? 'claude' : null)
         : resolveAvailableEngine(agent.engine, available)
       if (agent.providerProfile && !engine) console.warn(`[computer] provider unavailable for ${agent.id}; runner stopped`)
       if (!engine) {
@@ -3636,7 +3643,7 @@ async function doRun(serverOverride?: string): Promise<void> {
       try { profiles = readProviderProfiles(join(CONFIG_DIR, 'providers.json')) }
       catch (err) { console.warn('[computer]', (err as Error).message) }
       const advertisedSnapshot = snapshot.map((entry) => entry.id === 'claude'
-        ? { ...entry, providerProfiles: allowUnsandboxedByoa() ? [] : profiles.map(providerProfileMetadata) } : entry)
+        ? { ...entry, providerProfiles: allowUnsandboxedByoa(process.env, 'claude') ? [] : profiles.map(providerProfileMetadata) } : entry)
       const fingerprint = JSON.stringify(advertisedSnapshot)
       lastEngineSnapshot = await reportEngineSnapshot(
         fingerprint,

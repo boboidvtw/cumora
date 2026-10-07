@@ -64,3 +64,18 @@ test('ordinary engine failures are left alone', () => {
     assert.equal(codexProfileIsRejected(), false)
   }
 })
+
+// The thread-level sandbox Codex runs each turn under must follow the codex
+// opt-in only. It used to check `claude`, so opting Claude out of the sandbox
+// silently gave Codex danger-full-access too, and opting Codex out did nothing.
+test('the codex thread sandbox follows the codex opt-in, not claude\'s', async () => {
+  const { codexThreadSecurityParams } = await import('../agents/computer/engine.js')
+  const sandboxFor = (value: string | undefined) =>
+    codexThreadSecurityParams(value === undefined ? {} : { CUMORA_BYOA_ALLOW_UNSANDBOXED: value }).sandbox
+  assert.equal(sandboxFor(undefined), 'workspace-write')
+  assert.equal(sandboxFor('claude'), 'workspace-write')
+  assert.equal(sandboxFor('hermes,antigravity'), 'workspace-write')
+  assert.equal(sandboxFor('codex'), 'danger-full-access')
+  assert.equal(sandboxFor('hermes,codex'), 'danger-full-access')
+  assert.equal(sandboxFor('1'), 'danger-full-access')
+})

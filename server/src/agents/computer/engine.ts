@@ -1253,16 +1253,18 @@ function triageModel(fallback: string): string {
   return process.env.CUMORA_TRIAGE_MODEL?.trim() || fallback
 }
 
-function extraArgs(envVar: string): string[] {
-  const raw = process.env[envVar]
+function extraArgs(envVar: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = env[envVar]
   return raw ? raw.split(/\s+/).filter(Boolean) : []
 }
 
 /** Whole-argv overrides are intentionally an unsafe escape hatch: Cumora
  * cannot prove that an opaque flag set preserves its sandbox. Ignore them in
- * the secure default mode; the daemon logs the opt-in requirement at startup. */
-function unsafeEngineArgs(envVar: string): string[] {
-  return allowUnsandboxedByoa() ? extraArgs(envVar) : []
+ * the secure default mode; the daemon logs the opt-in requirement at startup.
+ * Scoped to the engine they feed, so opting Hermes out of the sandbox does
+ * not switch on overrides for Claude or Codex. */
+export function unsafeEngineArgs(envVar: string, engine: EngineId, env: NodeJS.ProcessEnv = process.env): string[] {
+  return allowUnsandboxedByoa(env, engine) ? extraArgs(envVar, env) : []
 }
 
 const PERSONA_HEADER = (
@@ -1751,7 +1753,7 @@ class ClaudeAdapter implements EngineAdapter {
     // --output-format json wraps the reply in a result envelope that ALSO carries
     // token usage (incl. cache_read/cache_creation) → we unwrap `.result` as the
     // text and pass `.usage` up for the triage cost ledger.
-    const flags = unsafeEngineArgs('CUMORA_TRIAGE_ARGS')
+    const flags = unsafeEngineArgs('CUMORA_TRIAGE_ARGS', 'claude')
     const env = claudeCoreEnv(args.env)
     const model = claudeFastModelArgs(env, args.model)
     const { command, shell, wantsStdinPrompt } = resolveSpawn(this.bin)
@@ -1811,7 +1813,7 @@ class ClaudeAdapter implements EngineAdapter {
     // Skipped when a CUMORA_CLAUDE_ARGS override is set — startSession() returns
     // null then, so the wake collapses to run() / one-shot exec, which probe()
     // already covers. The honest signal here is just "redundant".
-    if (unsafeEngineArgs('CUMORA_CLAUDE_ARGS').length) {
+    if (unsafeEngineArgs('CUMORA_CLAUDE_ARGS', 'claude').length) {
       return { ok: true, detail: '', skipped: true }
     }
     // The realistic break on the persistent-session path is `--append-system-prompt-file`
@@ -1870,7 +1872,7 @@ class ClaudeAdapter implements EngineAdapter {
     // events the daemon can log. Secure mode injects a fail-closed policy;
     // the dangerous bypass remains only for explicit compatibility mode.
     // Big-brain model → --model; small-brain → ANTHROPIC_SMALL_FAST_MODEL env.
-    const flags = unsafeEngineArgs('CUMORA_CLAUDE_ARGS')
+    const flags = unsafeEngineArgs('CUMORA_CLAUDE_ARGS', 'claude')
     const model = args.model ? ['--model', args.model] : []
     const env = claudeTurnEnv(args.env, args.fastModel)
     // Continuous context across wakes: resume the agent's prior session so it
@@ -1895,7 +1897,7 @@ class ClaudeAdapter implements EngineAdapter {
   startSession(args: EngineSessionArgs): EngineSession | null {
     // Respect a user's custom flag override (CUMORA_CLAUDE_ARGS) by NOT using the
     // persistent path — those flags are tuned for the one-shot run; fall back to run().
-    if (unsafeEngineArgs('CUMORA_CLAUDE_ARGS').length) return null
+    if (unsafeEngineArgs('CUMORA_CLAUDE_ARGS', 'claude').length) return null
     const model = args.model ? ['--model', args.model] : []
     const env = claudeTurnEnv(args.env, args.fastModel)
     // --resume only on the FIRST spawn / after a restart, to continue a prior
@@ -1956,8 +1958,10 @@ const CODEX_SECURE_CONFIG_ARGS = [
   '-c', 'shell_environment_policy.ignore_default_excludes=false',
 ]
 
-function codexThreadSecurityParams(): Record<string, unknown> {
-  return allowUnsandboxedByoa(process.env, 'claude')
+/** The sandbox each Codex thread runs under. Scoped to the codex opt-in: a
+ *  Claude-only opt-in must not lift Codex's sandbox. */
+export function codexThreadSecurityParams(env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+  return allowUnsandboxedByoa(env, 'codex')
     ? { approvalPolicy: 'never', sandbox: 'danger-full-access' }
     : { approvalPolicy: 'never', sandbox: 'workspace-write' }
 }
@@ -2408,7 +2412,7 @@ class CodexAdapter implements EngineAdapter {
     // probe() already covers — running the JSON-RPC probe would just add a false
     // signal. Mark skipped and let doctor hide the line.
     if (!allowUnsandboxedByoa(process.env, 'codex')
-        || unsafeEngineArgs('CUMORA_CODEX_ARGS').length
+        || unsafeEngineArgs('CUMORA_CODEX_ARGS', 'codex').length
         || process.env.CUMORA_CODEX_NO_APP_SERVER === '1'
         || IS_WIN) {
       return Promise.resolve({ ok: true, detail: '', skipped: true })
@@ -2510,7 +2514,7 @@ class CodexAdapter implements EngineAdapter {
     // filesystem/network/environment profile and reaches Cumora only through
     // local IPC. Historical full-access flags and argv overrides remain
     // available exclusively behind the explicit compatibility opt-in.
-    const flags = unsafeEngineArgs('CUMORA_CODEX_ARGS')
+    const flags = unsafeEngineArgs('CUMORA_CODEX_ARGS', 'codex')
     const base = flags.length
       ? ['exec', ...flags]
       : allowUnsandboxedByoa(process.env, 'codex')
@@ -2547,7 +2551,7 @@ class CodexAdapter implements EngineAdapter {
     // mcp_servers — a narrower gap than losing every agent's continuity, on the
     // operator's own machine, with their own config. CUMORA_CODEX_NO_APP_SERVER=1
     // still opts out, and a failing session degrades to one-shot (see daemon.ts).
-    if (unsafeEngineArgs('CUMORA_CODEX_ARGS').length) return null
+    if (unsafeEngineArgs('CUMORA_CODEX_ARGS', 'codex').length) return null
     if (process.env.CUMORA_CODEX_NO_APP_SERVER === '1') return null
     if (IS_WIN) return null
     try { ensureGitRepoForCodex(args.home) }
