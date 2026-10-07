@@ -133,6 +133,23 @@ if git -C "$repo" rev-parse --verify --quiet refs/upstream/main >/dev/null; then
   [ "$behind" = 0 ] && ok "zh-tw 已包含上次抓到的上游" || warn "zh-tw 落後上次抓到的上游 $behind 個 commit（見 README「同步上游更新」）"
 fi
 
+# GitHub CI for zh-tw. Optional: skipped quietly without gh, a login or network.
+remote=$(git -C "$repo" remote get-url origin 2>/dev/null | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')
+if command -v gh >/dev/null 2>&1 && [ -n "$remote" ]; then
+  ci=$(gh run list --repo "$remote" --workflow pr.yml --branch zh-tw --limit 1 \
+    --json status,conclusion,headSha,url --jq '.[0] | "\(.status) \(.conclusion) \(.headSha[0:7]) \(.url)"' 2>/dev/null || true)
+  head=$(git -C "$repo" rev-parse --short=7 zh-tw 2>/dev/null)
+  set -- $ci
+  case "${1:-}" in
+    completed)
+      if [ "$2" = success ]; then ok "GitHub CI 通過（$3）"; else bad "GitHub CI 結果是 $2（$3）：$4"; fi
+      [ "$3" = "$head" ] || warn "最新的 CI 跑的是 $3，不是目前的 zh-tw（$head）；推上去了嗎？"
+      ;;
+    '') ;;
+    *) ok "GitHub CI 正在跑（$3）：$4" ;;
+  esac
+fi
+
 echo
 if [ "$broken" = 0 ]; then echo "沒有發現問題。"; else echo "有項目要處理（✗）。"; fi
 exit "$broken"
