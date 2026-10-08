@@ -192,6 +192,24 @@ else
   fi
 fi
 
+# Restore drill (restore-drill.sh): a backup nobody has restored is a hope.
+drill_last="$HOME/.cumora/restore-drill.last"
+if [ -f "$drill_last" ]; then
+  IFS="$(printf '\t')" read -r drill_result drill_at drill_note < "$drill_last" || true
+  drill_days=$(( ($(date +%s) - ${drill_at:-0}) / 86400 ))
+  drill_when=$(date -r "${drill_at:-0}" '+%m/%d')
+  if [ "$drill_result" != ok ]; then
+    bad "上次還原演練失敗（$drill_when）：$drill_note"
+    printf '    → 看 ~/.cumora/restore-drill.log，修好後跑 ./restore-drill.sh\n'
+  elif [ "$drill_days" -le 45 ]; then ok "還原演練通過（$drill_when）：$drill_note"
+  else warn "上次還原演練是 $drill_days 天前（$drill_when），跑一次 ./restore-drill.sh"; fi
+fi
+if [ ! -f "$HOME/Library/LaunchAgents/ai.cumora.restore-drill.plist" ]; then
+  warn "沒有設定每月還原演練（./restore-drill.sh --install）"
+elif [ ! -f "$drill_last" ]; then
+  warn "每月還原演練已設定，還沒跑過（./restore-drill.sh 可以先跑一次）"
+fi
+
 section "上游"
 repo=$(cd ../.. && pwd)
 if [ -f "$HOME/Library/LaunchAgents/ai.cumora.upstream-check.plist" ]; then
