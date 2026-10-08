@@ -138,12 +138,39 @@ hermes_on=
 [ -f "$local_plist" ] && [ -n "$(plist_env "$local_plist" CUMORA_HERMES_ACP_BIN)" ] && hermes_on=1
 if [ -z "$models" ]; then
   if [ -n "$hermes_on" ]; then bad "LM Studio 沒有回應（lms server start）：Hermes 智能體不能回覆"
-  else warn "LM Studio 沒有回應（lms server start）：頭像會改用名字決定外觀，其他不受影響"; fi
+  else warn "LM Studio 沒有回應（lms server start）：智能體不會主動接看板上的工作，頭像改用名字決定外觀；聊天不受影響"; fi
 else
   case "$models" in
     *"\"$model\""*) ok "LM Studio 有回應，有模型 $model" ;;
     *) warn "LM Studio 有回應，但沒有模型 $model" ;;
   esac
+fi
+# The server's own small LLM calls (agenda check, triage, routing) are in the
+# ledger; agent-turn rows are the agents themselves, checked above.
+server_llm=$(sed -n 's/^SERVER_LLM=//p' .env 2>/dev/null)
+server_llm=${server_llm:-local}
+if calls=$(docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -AtF "	" -v ON_ERROR_STOP=1' 2>/dev/null <<'SQL'
+SELECT count(*),
+       count(*) FILTER (WHERE status <> 'ok'),
+       coalesce(string_agg(DISTINCT purpose, '、') FILTER (WHERE status <> 'ok'), ''),
+       coalesce(extract(epoch from max(created_at) FILTER (WHERE status <> 'ok'))::bigint::text, ''),
+       coalesce((array_agg(model ORDER BY created_at DESC) FILTER (WHERE status <> 'ok'))[1], ''),
+       coalesce(left(regexp_replace((array_agg(error ORDER BY created_at DESC) FILTER (WHERE status <> 'ok'))[1], '\s+', ' ', 'g'), 120), '')
+  FROM llm_calls
+ WHERE purpose <> 'agent-turn' AND created_at > now() - interval '24 hours'
+SQL
+); then
+  IFS='	' read -r total failed purposes last_at last_model last_error <<EOF2
+$calls
+EOF2
+  where="LM Studio"; [ "$server_llm" = local ] || where=OpenAI
+  if [ "${failed:-0}" -gt 0 ]; then
+    warn "伺服器端的小型判斷最近 24 小時失敗 $failed／$total 次（$purposes；最後一次 $(date -r "$last_at" '+%m/%d %H:%M')，模型 $last_model）：$last_error"
+  elif [ "${total:-0}" -gt 0 ]; then
+    ok "伺服器端的小型判斷（$where）最近 24 小時 $total 次都成功"
+  else
+    ok "伺服器端的小型判斷用 $where（最近 24 小時沒有需要判斷的事）"
+  fi
 fi
 if [ -n "$hermes_on" ]; then
   image=$(plist_env "$local_plist" CUMORA_HERMES_IMAGE)
