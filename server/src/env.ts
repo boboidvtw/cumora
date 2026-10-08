@@ -22,7 +22,10 @@ const DEFAULT_MODEL = process.env.OPENAI_MODEL ?? 'gpt-5.5'
 // palette, completion verifier, agenda pre-check, decision summarizer, etc.).
 // Kept as a *named* default so all cerebellum knobs land on the same model
 // when an operator doesn't override individually.
-const DEFAULT_SUPPORT_MODEL = process.env.OPENAI_MODEL_SUPPORT ?? 'gpt-5.4-mini'
+// Self-host SERVER_LLM=local (local-llm.ts): name the local model, so the
+// ledger records what actually ran.
+const DEFAULT_SUPPORT_MODEL = process.env.OPENAI_MODEL_SUPPORT
+  ?? ((process.env.SERVER_LLM === 'local' && process.env.LOCAL_LLM_MODEL) || 'gpt-5.4-mini')
 
 // Public-source dev default for the runtime-JWT secret. Safe for a single
 // dev machine; a production deploy left on it lets anyone who read the
@@ -136,6 +139,12 @@ export const env = {
    */
   LOCAL_LLM_BASE_URL: process.env.LOCAL_LLM_BASE_URL ?? '',
   LOCAL_LLM_MODEL: process.env.LOCAL_LLM_MODEL ?? '',
+  /**
+   * 'local' sends the server's own LLM calls (agenda check, triage, routing,
+   * Convene decisions) to LOCAL_LLM_BASE_URL instead of OpenAI, with
+   * LOCAL_LLM_MODEL and reasoning off (local-llm.ts). Default 'openai'.
+   */
+  SERVER_LLM: process.env.SERVER_LLM === 'local' ? 'local' as const : 'openai' as const,
   /** Image model for avatar generation. Override with OPENAI_IMAGE_MODEL. */
   OPENAI_IMAGE_MODEL: process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
   /** Background scanner cadence */

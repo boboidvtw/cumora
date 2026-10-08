@@ -36,6 +36,10 @@ x-server-env: &server-env
   AVATAR_PROVIDER: ${AVATAR_PROVIDER:-local}
   LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL-http://host.docker.internal:1234/v1}
   LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-qwen3.8-27b}
+  # The server's own small LLM calls (should an idle agent pick up a board
+  # card or a stalled thread, triage, routing) go to the same LM Studio model,
+  # not OpenAI. Set SERVER_LLM=openai in .env with a real OPENAI_API_KEY to undo.
+  SERVER_LLM: ${SERVER_LLM:-local}
 
 services:
   postgres:

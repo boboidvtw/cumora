@@ -66,6 +66,14 @@ const SEED_PRICES: Record<string, ModelPrice> = {
 // Last-resort rate for an unrecognized model: mid-tier, ALWAYS flagged estimated.
 const FALLBACK_PRICE: ModelPrice = { inPer1M: 3, cachedInPer1M: 0.3, cacheWritePer1M: 3.75, outPer1M: 15, verified: false }
 
+// Self-host SERVER_LLM=local (local-llm.ts): the server's own calls run on a
+// model on this machine, which costs nothing.
+const LOCAL_PRICE: ModelPrice = { inPer1M: 0, cachedInPer1M: 0, cacheWritePer1M: 0, outPer1M: 0, verified: true }
+function isLocalServerModel(id: string): boolean {
+  const local = (process.env.LOCAL_LLM_MODEL ?? '').toLowerCase().trim()
+  return process.env.SERVER_LLM === 'local' && local !== '' && id === local
+}
+
 let envOverrides: Record<string, ModelPrice> | null = null
 function overrides(): Record<string, ModelPrice> {
   if (envOverrides) return envOverrides
@@ -103,6 +111,7 @@ export function priceFor(model: string | null | undefined): ModelPrice {
   const ov = overrides()
   if (ov[id]) return ov[id]
   for (const [key, price] of Object.entries(ov)) if (matches(key)) return price
+  if (isLocalServerModel(id)) return LOCAL_PRICE
   if (SEED_PRICES[id]) return SEED_PRICES[id]
   for (const [key, price] of Object.entries(SEED_PRICES)) if (matches(key)) return price
   return FALLBACK_PRICE

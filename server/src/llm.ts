@@ -10,6 +10,8 @@
  *   2. Else (sub2api unconfigured, or new tenant without a provisioned
  *      key yet) → legacy single `env.OPENAI_API_KEY` client pointed at
  *      OpenAI directly. No quotas — same behavior as pre-sub2api.
+ *      Self-host: SERVER_LLM=local points this client at a model on this
+ *      machine instead (local-llm.ts).
  *
  * Callers pass `tenant` (= company_id). When `tenant` is null (e.g.
  * platform-wide tasks like the avatar regen of a seeded agent before
@@ -43,6 +45,7 @@
 import OpenAI from 'openai'
 import { pool } from './db/pool.js'
 import { env } from './env.js'
+import { localLlmConfig, withLocalModel } from './local-llm.js'
 import { isNovitaModel, novitaResponsesShim } from './novita.js'
 import { isOrcaRouterModel, orcarouterResponsesCreate } from './orcarouter.js'
 import { sub2apiConfigured, sub2apiOpenAIBaseURL } from './sub2api.js'
@@ -204,10 +207,19 @@ export function invalidateLlmClient(tenant: string): void {
 
 let _legacy: OpenAI | null = null
 function legacyClient(): OpenAI {
-  if (!_legacy) _legacy = new OpenAI({
-    apiKey: env.OPENAI_API_KEY,
-    maxRetries: SDK_MAX_RETRIES,
-    timeout: SDK_TIMEOUT_MS,
-  })
+  if (_legacy) return _legacy
+  const local = localLlmConfig(env)
+  _legacy = local
+    ? withLocalModel(new OpenAI({
+        apiKey: 'local',
+        baseURL: local.baseURL,
+        maxRetries: SDK_MAX_RETRIES,
+        timeout: SDK_TIMEOUT_MS,
+      }), local.model)
+    : new OpenAI({
+        apiKey: env.OPENAI_API_KEY,
+        maxRetries: SDK_MAX_RETRIES,
+        timeout: SDK_TIMEOUT_MS,
+      })
   return _legacy
 }
