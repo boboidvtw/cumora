@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -38,12 +38,19 @@ function alive(pid: number): boolean {
 }
 
 /** Run the real `--stop` in a child, so it reads OUR sandbox HOME rather than
- *  the developer's — CONFIG_DIR is resolved once, at module load. */
-async function runStop(home: string): Promise<string> {
+ *  the developer's — CONFIG_DIR is resolved once, at module load. Its process
+ *  sweep (`pgrep -f 'agent computer'`) is machine-wide, though, and used to
+ *  SIGTERM the developer's own daemon on every test run; a `pgrep` on PATH that
+ *  lists only `sweep` keeps it to this test's processes. */
+async function runStop(home: string, sweep: number[]): Promise<string> {
+  const bin = join(home, 'bin')
+  await mkdir(bin, { recursive: true })
+  await writeFile(join(bin, 'pgrep'), `#!/bin/sh\nprintf '%s\\n' ${sweep.join(' ')}\n`, 'utf8')
+  await chmod(join(bin, 'pgrep'), 0o755)
   const script = `const { runComputerDaemon } = await import(${JSON.stringify(DAEMON)}); await runComputerDaemon(['--stop'])`
   const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
     cwd: REPO_ROOT,
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH ?? ''}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let out = ''
@@ -67,26 +74,39 @@ async function recordRunning(home: string, pid: number): Promise<void> {
   )
 }
 
+/** Stands in for the developer's own daemon, started from another HOME. A
+ *  `--stop` run by these tests must never reach it. */
+async function withBystander(run: () => Promise<void>): Promise<void> {
+  const other = await mkdtemp(join(tmpdir(), 'cumora-bystander-'))
+  const bystander = spawnDecoy(other, ['--server', 'http://localhost:5181'])
+  try {
+    await run()
+    assert.equal(alive(bystander.pid), true, '--stop in a sandbox HOME killed a daemon outside it')
+  } finally {
+    bystander.kill()
+  }
+}
+
 /** SIGTERM then SIGKILL, with a grace window matching the daemon's own. */
 async function settle(): Promise<void> {
   await new Promise((r) => setTimeout(r, 2500))
 }
 
-test('--stop kills the foreground daemon started by --pair', { skip: isWindows }, async () => {
+test('--stop kills the foreground daemon started by --pair', { skip: isWindows }, () => withBystander(async () => {
   const home = await sandbox()
   const daemon = spawnDecoy(home, ['--pair', '8lkqelTbO'])
   try {
     // What `doRun` writes about itself once it becomes the daemon.
     await recordRunning(home, daemon.pid)
-    const out = await runStop(home)
+    const out = await runStop(home, [daemon.pid])
     await settle()
     assert.equal(alive(daemon.pid), false, `--stop left the paired daemon running. Output:\n${out}`)
   } finally {
     daemon.kill()
   }
-})
+}))
 
-test('a --pair CLI that never became the daemon is still spared', { skip: isWindows }, async () => {
+test('a --pair CLI that never became the daemon is still spared', { skip: isWindows }, () => withBystander(async () => {
   const home = await sandbox()
   // Someone re-pairing in another terminal: same command line, but it is NOT the
   // pid in running.json, so it has never declared itself a daemon.
@@ -94,7 +114,7 @@ test('a --pair CLI that never became the daemon is still spared', { skip: isWind
   const daemon = spawnDecoy(home, ['--server', 'https://api.cumora.ai'])
   try {
     await recordRunning(home, daemon.pid)
-    const out = await runStop(home)
+    const out = await runStop(home, [oneShot.pid, daemon.pid])
     await settle()
     assert.equal(alive(daemon.pid), false, `the real daemon survived --stop. Output:\n${out}`)
     assert.equal(alive(oneShot.pid), true, `--stop killed a sibling one-shot CLI. Output:\n${out}`)
@@ -102,9 +122,9 @@ test('a --pair CLI that never became the daemon is still spared', { skip: isWind
     oneShot.kill()
     daemon.kill()
   }
-})
+}))
 
-test('a recycled pid in running.json is not killed', { skip: isWindows }, async () => {
+test('a recycled pid in running.json is not killed', { skip: isWindows }, () => withBystander(async () => {
   const home = await sandbox()
   // The pid file is stale and the OS has handed that pid to something else. The
   // recorded pid buys a process out of the flag rule, never out of being ours.
@@ -114,10 +134,10 @@ test('a recycled pid in running.json is not killed', { skip: isWindows }, async 
   assert.ok(stranger.pid)
   try {
     await recordRunning(home, stranger.pid)
-    const out = await runStop(home)
+    const out = await runStop(home, [])
     await settle()
     assert.equal(alive(stranger.pid), true, `--stop killed an unrelated process. Output:\n${out}`)
   } finally {
     try { stranger.kill('SIGKILL') } catch { /* gone */ }
   }
-})
+}))
