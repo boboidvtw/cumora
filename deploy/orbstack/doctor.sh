@@ -100,7 +100,7 @@ order by 1;
 SQL
   ); then
     if [ -z "$stuck" ]; then
-      ok "智能體最近沒有執行失敗"
+      ok "智能體沒有在對話裡回報跑不起來"
     else
       # One line per distinct engine + reason: newest failure time, names.
       grouped=$(printf '%s\n' "$stuck" | awk -F '\t' '{ k = $4 "\t" $3; n[k] = n[k] (n[k] ? "、" : "") $1; if ($2 > t[k]) t[k] = $2 }
@@ -126,6 +126,43 @@ GROUPED
   else
     warn "查不到智能體的執行紀錄（資料庫沒有回應？）"
   fi
+fi
+
+# Failures that never reach the chat: the daemon keeps throttles and used-up
+# plans ("usage limit … try again at 11:58 PM") out of conversations and just
+# waits, so the notice check above can't see them. Show agents whose latest
+# finished run in the last 24 hours failed (and that aren't listed above).
+if [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; then
+  failed_runs=$(docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -AtF "	" -v ON_ERROR_STOP=1' 2>/dev/null <<'SQL'
+with last as (
+  select distinct on (agent_id) agent_id, status, coalesce(error, summary, '') as err,
+         coalesce(finished_at, updated_at) as at, trigger->>'engine' as engine
+  from agent_runs
+  where status in ('completed', 'failed') and coalesce(finished_at, updated_at) > now() - interval '24 hours'
+  order by agent_id, coalesce(finished_at, updated_at) desc
+)
+select coalesce(p.name, l.agent_id), extract(epoch from l.at)::bigint,
+       left(regexp_replace(replace(l.err, E'\n', ' '), '^local [A-Za-z0-9_-]+ failed \(exit -?[0-9]+\): ', ''), 200),
+       coalesce(l.engine, '')
+from last l
+left join participants p on p.id = l.agent_id
+where l.status = 'failed'
+  and (l.engine is null or p.engine is null or p.engine_inherit or p.engine = l.engine)
+order by 1;
+SQL
+  )
+  tab=$(printf '\t')
+  while IFS="$tab" read -r name at reason engine; do
+    [ -n "$name" ] || continue
+    printf '%s\n' "${stuck:-}" | cut -f1 | grep -qxF "$name" && continue
+    warn "$name 最近一次執行失敗（${engine:+$engine 引擎，}$(date -r "$at" '+%m/%d %H:%M')）：$reason"
+    case "$reason" in
+      *"usage limit"*|*"try again at"*|*quota*|*"rate limit"*|*rate-limited*)
+        printf '    → 引擎額度用完或被限流：常駐程式會等到引擎說的時間再試，不用處理；要早點恢復就幫該引擎加值\n' ;;
+    esac
+  done <<RUNS
+$failed_runs
+RUNS
 fi
 
 section "本機模型（LM Studio）"
