@@ -49,6 +49,7 @@ import {
 } from '../runtime/wake-options.js'
 import { SKYPE_EMOTICONS_GUIDE } from '../skype-emoticons.js'
 import { finalizeTriage, isRateLimited, parseTriage } from '../triage-core.js'
+import { limitResetAt } from './limit-reset.js'
 import { type ActionSurface, actionSurfaceFor, actionSurfaceText, calendarExampleText, postingMechanicsText } from './prompt-surface.js'
 import { allowUnsandboxedByoa, unsandboxedByoaEngines, detectEnginesWithStatus, ENGINE_IDS, engineFailureOf, type DetectedEngineSnapshot, type EngineHopReport, type EngineId, type EngineRunResult, type EngineSession, type EngineUsage, enrichDetectedEngines, evaluateRunnableEngines, getAdapter, runEngineDoctor, type RunnableEngineEvaluation, snapshotDetectedEngines } from './engine.js'
 import { EngineSessionStore, sessionIdPreview } from './session-store.js'
@@ -302,11 +303,15 @@ export function classifyTurnOutcome(engineError: string | null | undefined): Tur
 
 /** The engine backoff deadline a finished turn implies, or null to leave the
  *  current one untouched. Null is not zero: an unexplained failure must not
- *  cancel a pause an earlier, well-understood one established. */
-export function backoffUntilFor(outcome: TurnOutcome, now: number): number | null {
+ *  cancel a pause an earlier, well-understood one established. A throttle that
+ *  names its reset time ("try again at 11:58 PM") waits until then. */
+export function backoffUntilFor(outcome: TurnOutcome, now: number, engineError?: string | null): number | null {
   switch (outcome) {
     case 'ok': return 0
-    case 'rate-limited': return now + ENGINE_BACKOFF_AFTER_RATE_LIMIT_MS
+    case 'rate-limited': return Math.max(
+      now + ENGINE_BACKOFF_AFTER_RATE_LIMIT_MS,
+      (engineError && limitResetAt(engineError, new Date(now))) || 0,
+    )
     case 'operator-fix': return now + ENGINE_BACKOFF_AFTER_OPERATOR_FIX_MS
     case 'transient': return null
   }
@@ -1779,6 +1784,8 @@ export class AgentRunner {
    *  pause used to print as a rate-limit cooldown, which sends whoever is
    *  reading the daemon log looking for a throttle that was never there. */
   private engineBackoffWhy = 'rate limit'
+  /** The pause deadline already logged as skipped, so each pause logs once. */
+  private loggedPauseUntil = 0
   private stopped = false
   private lastWakeConvo: string | null = null
   /** Synthetic work delivered with a wake has no durable chat row. Preserve it
@@ -2284,11 +2291,25 @@ export class AgentRunner {
   /** Enter, or clear, this agent's engine pause for a finished turn. Both turn
    *  paths call this and nothing else assigns engineBackoffUntil, so the chat
    *  wake and the agenda heartbeat cannot drift apart again. */
-  private applyTurnBackoff(outcome: TurnOutcome): void {
-    const until = backoffUntilFor(outcome, Date.now())
+  /** A usage-limit pause can last hours and the poll ticks every 20s, so say
+   *  once per pause that turns are being skipped, not on every tick. */
+  private logPausedSkip(what: string): void {
+    if (this.loggedPauseUntil === this.engineBackoffUntil) return
+    this.loggedPauseUntil = this.engineBackoffUntil
+    const leftS = Math.round((this.engineBackoffUntil - Date.now()) / 1000)
+    console.log(`[computer] ${this.agent.id} skip (${what}): engine paused (${this.engineBackoffWhy}), ${leftS}s left; further skips until it ends are not logged`)
+  }
+
+  private applyTurnBackoff(outcome: TurnOutcome, engineError: string | null | undefined): void {
+    const now = Date.now()
+    const until = backoffUntilFor(outcome, now, engineError)
     if (until === null) return
     this.engineBackoffUntil = until
     this.engineBackoffWhy = outcome === 'operator-fix' ? 'operator action needed' : 'rate limit'
+    if (outcome === 'rate-limited' && until - now > ENGINE_BACKOFF_AFTER_RATE_LIMIT_MS) {
+      this.engineBackoffWhy = `usage limit, resets ${new Date(until).toLocaleString()}`
+      console.warn(`[computer] ${this.agent.id} engine usage limit — pausing until ${new Date(until).toLocaleString()} (the engine's stated reset)`)
+    }
   }
 
   private visibleEngineError(exitCode: number, detail?: string): string {
@@ -2801,8 +2822,7 @@ export class AgentRunner {
     // Place this BEFORE the /agenda fetch + /runs row creation so we don't
     // leak a 'running' run row that the stale-run sweeper later reaps.
     if (Date.now() < this.engineBackoffUntil) {
-      const leftS = Math.round((this.engineBackoffUntil - Date.now()) / 1000)
-      console.log(`[computer] ${this.agent.id} agenda skip: engine paused (${this.engineBackoffWhy}), ${leftS}s left`)
+      this.logPausedSkip('agenda')
       return
     }
     const ag = await runtimeGet<{ actionable?: boolean; brief?: string; focus?: string }>(
@@ -2879,7 +2899,7 @@ export class AgentRunner {
     } else if (outcome === 'ok') {
       spawnPacer.onOk()
     }
-    this.applyTurnBackoff(outcome)
+    this.applyTurnBackoff(outcome, engineError)
     // Finalize the run — WITHOUT this the row stays 'running' and the 10-min
     // stale-run sweeper reaps EVERY agenda turn as "orphaned" (the bug behind the
     // recurring Failed/orphaned runs), no matter how fast the turn actually was.
@@ -3029,8 +3049,7 @@ export class AgentRunner {
         // brain is wasted if we can't follow up with the big one). Unread is
         // kept (no ack), so the next wake AFTER the cooldown will pick it up.
         if (Date.now() < this.engineBackoffUntil) {
-          const leftS = Math.round((this.engineBackoffUntil - Date.now()) / 1000)
-          console.log(`[computer] ${this.agent.id} skip (${reason}): engine paused (${this.engineBackoffWhy}), ${leftS}s left`)
+          this.logPausedSkip(reason)
           break
         }
         const turnStart = Date.now()
@@ -3293,7 +3312,7 @@ export class AgentRunner {
           // Clean turn → signal the pacer; the backoff itself is cleared below.
           spawnPacer.onOk()
         }
-        this.applyTurnBackoff(outcome)
+        this.applyTurnBackoff(outcome, engineError)
         if (run?.runId) {
           await runtimeBest(this.cfg.serverUrl, `/runs/${run.runId}/finish`, token, {
             status: exitCode === 0 ? 'completed' : 'failed',

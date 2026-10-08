@@ -93,6 +93,19 @@ test('a human-cleared failure waits far longer than a throttle', () => {
   assert.ok(operator > rate * 5, `${operator} should dwarf ${rate}`)
 })
 
+test('a throttle that names its reset time waits until then', () => {
+  // Codex out of plan quota: "try again at 11:58 PM". A 60s cooldown re-ran the
+  // agent every couple of minutes until the reset, each run a failure.
+  const now = new Date(2026, 9, 8, 20, 26).getTime()
+  const reset = new Date(2026, 9, 8, 23, 58).getTime()
+  const err = "You've hit your usage limit. Upgrade to Pro or try again at 11:58 PM."
+  assert.equal(backoffUntilFor('rate-limited', now, err), reset)
+  // A reset sooner than the normal window never shortens it.
+  assert.equal(backoffUntilFor('rate-limited', now, 'rate limit: try again in 5 seconds'), now + RATE_LIMIT_MS)
+  // Only throttles read it.
+  assert.equal(backoffUntilFor('operator-fix', now, err), now + OPERATOR_FIX_MS)
+})
+
 test('a transient failure leaves an existing pause alone rather than clearing it', () => {
   // null is deliberately not 0. An agent paused for a signed-out engine can
   // still fail some other way on its next attempt; if that cleared the pause,
@@ -113,10 +126,18 @@ test('nothing sets the pause except the one method', () => {
   // assignment is how the chat wake and the agenda heartbeat drifted apart.
   const assignments = DAEMON.match(/this\.engineBackoffUntil\s*=/g) ?? []
   assert.equal(assignments.length, 1, `expected one assignment, found ${assignments.length}`)
-  assert.match(DAEMON, /private applyTurnBackoff\(outcome: TurnOutcome\): void \{/)
+  assert.match(DAEMON, /private applyTurnBackoff\(outcome: TurnOutcome, engineError: string \| null \| undefined\): void \{/)
 })
 
 test('both turn paths end in it', () => {
-  const calls = DAEMON.match(/this\.applyTurnBackoff\(outcome\)/g) ?? []
+  const calls = DAEMON.match(/this\.applyTurnBackoff\(outcome, engineError\)/g) ?? []
   assert.equal(calls.length, 2, `expected the chat and agenda paths, found ${calls.length}`)
+})
+
+test('a pause is logged once, not on every skipped poll', () => {
+  // A usage-limit pause can last hours; logging each skip printed a line every
+  // 20s per agent (about 450 lines before one Codex reset).
+  const lines = DAEMON.match(/engine paused \(/g) ?? []
+  assert.equal(lines.length, 1, `expected one paused-skip log line, found ${lines.length}`)
+  assert.match(DAEMON, /private logPausedSkip\(/)
 })
