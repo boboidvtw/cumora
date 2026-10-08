@@ -2,7 +2,8 @@
 # Back up self-hosted Cumora: the Postgres database, the uploads volume and .env.
 #
 #   ./backup.sh               # take one backup now
-#   ./backup.sh --install     # run it every day at 03:30 (launchd)
+#   ./backup.sh --install     # run it every day at 03:30 (launchd); again
+#                             # later keeps the installed settings
 #   ./backup.sh --uninstall   # stop the daily run (backups already taken stay)
 #
 # Each backup is a folder <dir>/cumora-YYYYMMDD-HHMMSS with db.sql.gz,
@@ -38,6 +39,22 @@ here=$(pwd)
 PATH="$HOME/.orbstack/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 export PATH
 
+label=ai.cumora.backup
+plist="$HOME/Library/LaunchAgents/$label.plist"
+
+# Running --install again (say, to change how many to keep) keeps what the
+# installed job already has: anything not given on this command line is read
+# back from its plist. Without this, a bare re-run silently moved backups back
+# to ~/.cumora/backups and turned off the off-site copy. KEY= clears a value.
+if [ "${1:-}" = --install ] && [ -f "$plist" ]; then
+  for k in CUMORA_BACKUP_DIR CUMORA_BACKUP_KEEP CUMORA_BACKUP_DRILL_DAYS \
+           CUMORA_BACKUP_OFFSITE_DIR CUMORA_BACKUP_OFFSITE_KEEP CUMORA_BACKUP_OFFSITE_ENCRYPT; do
+    eval "[ -n \"\${$k+x}\" ]" && continue
+    v=$(/usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$k" "$plist" 2>/dev/null) || continue
+    export "$k=$v"
+  done
+fi
+
 dest=${CUMORA_BACKUP_DIR:-$HOME/.cumora/backups}
 keep=${CUMORA_BACKUP_KEEP:-14}
 offsite=${CUMORA_BACKUP_OFFSITE_DIR:-}
@@ -45,8 +62,6 @@ offsite_keep=${CUMORA_BACKUP_OFFSITE_KEEP:-30}
 offsite_encrypt=${CUMORA_BACKUP_OFFSITE_ENCRYPT:-1}
 drill_days=${CUMORA_BACKUP_DRILL_DAYS:-30}
 . "$here/offsite-crypto.sh"
-label=ai.cumora.backup
-plist="$HOME/Library/LaunchAgents/$label.plist"
 log="$HOME/.cumora/backup.log"
 
 case "${1:-}" in
