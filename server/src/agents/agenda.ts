@@ -44,6 +44,8 @@ export interface AgendaCard {
   assignee_id: string | null
   mentions: string[]
   updated_at: string
+  /** YYYY-MM-DD, when the card has a due date. */
+  due_on?: string | null
 }
 
 /** A calendar event in the current / imminent slot for this agent. */
@@ -193,7 +195,8 @@ async function loadAssignedCards(agentId: string, companyId: string): Promise<Ag
             c.column_id, col.title AS column_title,
             c.title, c.description, c.assignee_id,
             COALESCE(c.mentions, '[]'::jsonb) AS mentions,
-            c.updated_at::text AS updated_at
+            c.updated_at::text AS updated_at,
+            c.due_on::text AS due_on
        FROM board_cards c
        JOIN boards b ON b.id = c.board_id
        JOIN board_columns col ON col.id = c.column_id
@@ -343,7 +346,8 @@ function renderAgendaForClassifier(agenda: AgentAgenda): string {
     lines.push(`Kanban cards (${cards.length}):`)
     for (const c of cards) {
       const tag = c.assignee_id ? 'assigned' : 'mentioned'
-      lines.push(`- [${tag}] "${c.title}" in ${c.board_title} / ${c.column_title} (id=${c.id}, updated ${c.updated_at})`)
+      const due = c.due_on ? `, due ${c.due_on}` : ''
+      lines.push(`- [${tag}] "${c.title}" in ${c.board_title} / ${c.column_title} (id=${c.id}, updated ${c.updated_at}${due})`)
     }
   }
   if (stalls.length > 0) {
@@ -451,7 +455,7 @@ export async function classifyAgendaActionable(args: {
   const styleHint = (persona.style ?? '').slice(0, 400)
   const instructions = `You are Cumora's heartbeat agenda triage. Given an agent's currently-assigned Kanban cards and their currently-due calendar events, decide whether the agent should wake up RIGHT NOW to act on something, or stay quiet.
 
-Decide "actionable: true" only when at least one item is concrete, fresh, AND clearly belongs to this agent's role. Reject:
+Decide "actionable: true" only when at least one item is concrete, fresh, AND clearly belongs to this agent's role. A concrete card assigned to this agent in a not-done column is actionable even without a deadline, blocker or urgency: picking up assigned work while idle is the point of this check. A due date, when shown, only raises priority. Reject:
 - vague brainstorming cards with no owner action
 - cards already in a done/archive-style column
 - events that are personal markers (no agent_prompt)

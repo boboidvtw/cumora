@@ -185,6 +185,13 @@ test('renderAgendaForClassifier includes assigned/mentioned tags + ids', () => {
   assert.match(out, /Bring the migration status update/)
 })
 
+test('renderAgendaForClassifier shows a card due date only when the card has one', () => {
+  const card = SINGLE_CARD_AGENDA.cards[0]
+  const due = renderAgendaForClassifier({ ...SINGLE_CARD_AGENDA, cards: [{ ...card, due_on: '2026-10-08' }] })
+  assert.match(due, /due 2026-10-08/)
+  assert.doesNotMatch(renderAgendaForClassifier(SINGLE_CARD_AGENDA), /due /)
+})
+
 test('renderAgendaForClassifier keeps a stable prefix while preserving silence minutes', () => {
   const stall = {
     conversationId: 'direct-1',
@@ -372,6 +379,24 @@ test('classifyAgendaActionable leaves output headroom beyond reasoning tokens', 
     persona: STUB_PERSONA, companyId: 'c1', agenda: SINGLE_CARD_AGENDA,
   })
   assert.ok(maxOutputTokens >= 2_000, 'live support-model reasoning exceeded 800 tokens before emitting JSON')
+})
+
+test('classifyAgendaActionable tells the model an assigned card needs no deadline', async () => {
+  // A small local model read "wake RIGHT NOW" as "only when urgent" and turned
+  // down every concrete card it was assigned because none had a deadline.
+  let instructions = ''
+  __setLlmClientOverrideForTesting((async () => ({
+    responses: {
+      create: async (request: { instructions?: string }) => {
+        instructions = request.instructions ?? ''
+        return { output_text: JSON.stringify({ actionable: false, focus: '', reason: 'done' }) }
+      },
+    },
+  })) as unknown as Parameters<typeof __setLlmClientOverrideForTesting>[0])
+  await classifyAgendaActionable({
+    persona: STUB_PERSONA, companyId: 'c1', agenda: SINGLE_CARD_AGENDA,
+  })
+  assert.match(instructions, /assigned[^.]*not-done column[^.]*actionable[^.]*without a deadline/i)
 })
 
 test('classifyAgendaActionable: happy path with strict boolean true', async () => {
