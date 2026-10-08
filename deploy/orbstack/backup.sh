@@ -19,6 +19,10 @@
 #   CUMORA_BACKUP_OFFSITE_ENCRYPT  1 (default) encrypts the copy; 0 writes a
 #                        plain .tar.xz, which carries .env's secrets in the
 #                        clear, so only for a folder only you can read
+#   CUMORA_BACKUP_DRILL_DAYS  after a good backup, run ./restore-drill.sh when
+#                        the last passing drill is this many days old
+#                        (default 30; 0 turns it off). A failed drill is
+#                        retried with the next backup.
 #
 # The off-site copy is written after the local backup is complete and is
 # checked by decrypting it again before it gets its final name. If it fails,
@@ -39,6 +43,7 @@ keep=${CUMORA_BACKUP_KEEP:-14}
 offsite=${CUMORA_BACKUP_OFFSITE_DIR:-}
 offsite_keep=${CUMORA_BACKUP_OFFSITE_KEEP:-30}
 offsite_encrypt=${CUMORA_BACKUP_OFFSITE_ENCRYPT:-1}
+drill_days=${CUMORA_BACKUP_DRILL_DAYS:-30}
 . "$here/offsite-crypto.sh"
 label=ai.cumora.backup
 plist="$HOME/Library/LaunchAgents/$label.plist"
@@ -74,6 +79,7 @@ case "${1:-}" in
     <key>HOME</key><string>$HOME</string>
     <key>CUMORA_BACKUP_DIR</key><string>$dest</string>
     <key>CUMORA_BACKUP_KEEP</key><string>$keep</string>
+    <key>CUMORA_BACKUP_DRILL_DAYS</key><string>$drill_days</string>
 $offsite_env
   </dict>
 </dict></plist>
@@ -86,6 +92,7 @@ PLIST
       if [ "$offsite_encrypt" = 0 ]; then echo "異地副本（不加密，內含 .env 的密鑰）：$offsite（保留最近 $offsite_keep 份）"
       else echo "加密異地副本：$offsite（保留最近 $offsite_keep 份）"; fi
     fi
+    [ "$drill_days" = 0 ] || echo "還原演練：上次演練通過滿 $drill_days 天時，備份完順便演練一次（./restore-drill.sh）"
     echo "日誌：$log"
     exit 0
     ;;
@@ -171,8 +178,21 @@ fi
 size=$(du -sh "$dest/$name" | cut -f1)
 echo "$(stamp) 備份完成：$dest/$name（$size），保留最近 $keep 份"
 
+# Restore drill, when one is due, on the backup just written ($1). Under
+# launchd macOS (TCC) lets this job read files it created itself but not list
+# ~/Downloads or a Google Drive folder, so the drill gets the exact path.
+maybe_drill() {
+  [ "$drill_days" != 0 ] && [ -x "$here/restore-drill.sh" ] || return 0
+  drill_last="$HOME/.cumora/restore-drill.last"
+  if [ -f "$drill_last" ]; then
+    IFS="$(printf '\t')" read -r result at _ < "$drill_last" || true
+    [ "${result:-}" != ok ] || [ $(( ($(date +%s) - ${at:-0}) / 86400 )) -ge "$drill_days" ] || return 0
+  fi
+  "$here/restore-drill.sh" "$1" || true   # it records and notifies by itself
+}
+
 # Off-site copy: one file next to the others in $offsite.
-[ -n "$offsite" ] || exit 0
+[ -n "$offsite" ] || { maybe_drill "$dest/$name"; exit 0; }
 offsite_fail() {
   echo "$(stamp) 異地備份失敗：$*（本機備份 $dest/$name 已完成）" >&2
   notify "Cumora 異地備份失敗" "$*。本機備份已完成，詳情：~/.cumora/backup.log"
@@ -204,3 +224,4 @@ if [ "$count" -gt "$offsite_keep" ]; then
   done
 fi
 echo "$(stamp) 異地副本完成：$enc（$(du -h "$enc" | cut -f1)），保留最近 $offsite_keep 份"
+maybe_drill "$enc"

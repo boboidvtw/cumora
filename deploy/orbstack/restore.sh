@@ -123,7 +123,7 @@ fi
 
 # 3. Safety backup of the current state
 before=$(ls -1d "$safety_dir"/cumora-* 2>/dev/null | tail -n 1 || true)
-CUMORA_BACKUP_DIR="$safety_dir" CUMORA_BACKUP_KEEP=5 CUMORA_BACKUP_OFFSITE_DIR= ./backup.sh || fail "還原前的備份失敗，沒有改動任何東西"
+CUMORA_BACKUP_DIR="$safety_dir" CUMORA_BACKUP_KEEP=5 CUMORA_BACKUP_OFFSITE_DIR= CUMORA_BACKUP_DRILL_DAYS=0 ./backup.sh || fail "還原前的備份失敗，沒有改動任何東西"
 safety=$(ls -1d "$safety_dir"/cumora-* | tail -n 1)
 [ "$safety" != "$before" ] || fail "找不到剛做好的還原前備份，沒有改動任何東西"
 

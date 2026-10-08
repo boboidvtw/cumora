@@ -86,12 +86,13 @@ if [ -f "$backup_plist" ]; then
     for b in "$d"/cumora-*; do [ -f "$b/db.sql.gz" ] && basename "$b"; done
   done | sort | tail -n 1)
   max_days=${CUMORA_BACKUP_MAX_AGE_DAYS:-3}
-  # Run by launchd, macOS (TCC) may refuse to list ~/Downloads and the like
-  # until this script is allowed; that is not the same as an old backup.
+  # Run by launchd, macOS (TCC) won't let this job list ~/Downloads or a
+  # Google Drive folder (only the backup job itself is allowed). Then go by
+  # the backup job's own log: its last "備份完成" line.
   if [ -n "$backup_dir" ] && [ -d "$backup_dir" ] && ! ls "$backup_dir" >/dev/null 2>&1; then
-    echo "$(stamp) 警告：macOS 不讓這支腳本讀 $backup_dir，查不了備份新不新" >&2
-    notify "Cumora 上游檢查讀不到備份" "到 系統設定 → 隱私權與安全性 → 檔案與檔案夾，允許 check-upstream.sh 存取"
-  elif [ -z "$newest" ]; then
+    newest=$(sed -n 's#.*備份完成：.*/\(cumora-[0-9]\{8\}-[0-9]\{6\}\)（.*#\1#p' "$HOME/.cumora/backup.log" 2>/dev/null | tail -n 1)
+  fi
+  if [ -z "$newest" ]; then
     echo "$(stamp) 警告：找不到任何備份" >&2
     notify "Cumora 沒有備份" "找不到任何備份。跑一次 ./backup.sh 看看"
   else

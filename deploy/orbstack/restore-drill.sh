@@ -5,8 +5,12 @@
 #   ./restore-drill.sh                 # the newest off-site copy (or, without
 #                                      # one, the newest local backup)
 #   ./restore-drill.sh <backup>        # a backup folder or .tar.xz(.enc)
-#   ./restore-drill.sh --install       # run it on the 1st of every month, 04:30
-#   ./restore-drill.sh --uninstall     # stop the monthly run
+#
+# The daily backup (backup.sh) runs it by itself on the copy it just wrote,
+# once the last passing drill is CUMORA_BACKUP_DRILL_DAYS (default 30) days
+# old. It is not a launchd job of its own on purpose: under launchd macOS
+# (TCC) refuses to list ~/Downloads or a Google Drive folder, or to read files
+# there the job did not create; the backup job can read what it just wrote.
 #
 # It plays the worst case: no .env, only the backup. The throwaway project
 # (cumora-drill, port 5192) starts from the backup's own env, then .env is
@@ -18,7 +22,7 @@
 #   - every uploaded file has the backup's checksum
 #   - the server answers /api/health and has at least one account
 # The result goes to ~/.cumora/restore-drill.last (shown by ./doctor.sh) and
-# a macOS notification; the log is ~/.cumora/restore-drill.log.
+# a macOS notification; run by backup.sh, its output goes to ~/.cumora/backup.log.
 #
 #   CUMORA_DRILL_PORT   port of the throwaway server (default 5192)
 set -eu
@@ -31,10 +35,7 @@ export PATH
 project=cumora-drill
 port=${CUMORA_DRILL_PORT:-5192}
 volatile_tables="realtime_outbox"
-label=ai.cumora.restore-drill
-plist="$HOME/Library/LaunchAgents/$label.plist"
 backup_plist="$HOME/Library/LaunchAgents/ai.cumora.backup.plist"
-log="$HOME/.cumora/restore-drill.log"
 last="$HOME/.cumora/restore-drill.last"
 . "$here/offsite-crypto.sh"
 
@@ -44,67 +45,32 @@ notify() {
   b=$(printf '%s' "$2" | tr -d '"\\')
   osascript -e "display notification \"$b\" with title \"$t\"" >/dev/null 2>&1 || true
 }
-record() { mkdir -p "$HOME/.cumora"; printf '%s\t%s\t%s\n' "$1" "$(date +%s)" "$2" > "$last"; }
+recorded=
+record() { mkdir -p "$HOME/.cumora"; printf '%s\t%s\t%s\n' "$1" "$(date +%s)" "$2" > "$last"; recorded=1; }
 fail() {
   echo "$(stamp) 還原演練失敗：$*" >&2
   record fail "$*"
-  notify "Cumora 還原演練失敗" "$*。詳情：~/.cumora/restore-drill.log"
+  notify "Cumora 還原演練失敗" "$*。詳情：~/.cumora/backup.log"
   exit 1
 }
 plist_env() { [ -f "$1" ] && /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$2" "$1" 2>/dev/null || true; }
 
 case "${1:-}" in
-  --install)
-    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.cumora"
-    cat > "$plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>$label</string>
-  <key>ProgramArguments</key><array>
-    <string>$here/restore-drill.sh</string>
-  </array>
-  <key>WorkingDirectory</key><string>$here</string>
-  <key>StartCalendarInterval</key><dict>
-    <key>Day</key><integer>1</integer>
-    <key>Hour</key><integer>4</integer>
-    <key>Minute</key><integer>30</integer>
-  </dict>
-  <key>StandardOutPath</key><string>$log</string>
-  <key>StandardErrorPath</key><string>$log</string>
-  <key>EnvironmentVariables</key><dict>
-    <key>HOME</key><string>$HOME</string>
-    <key>CUMORA_DRILL_PORT</key><string>$port</string>
-  </dict>
-</dict></plist>
-PLIST
-    launchctl unload "$plist" 2>/dev/null || true
-    launchctl load "$plist"
-    echo "已設定每月 1 日 04:30 自動還原演練（Mac 當時在睡眠的話，醒來後補跑）。"
-    echo "日誌：$log"
-    exit 0
-    ;;
-  --uninstall)
-    launchctl unload "$plist" 2>/dev/null || true
-    rm -f "$plist"
-    echo "已取消每月還原演練。"
-    exit 0
-    ;;
-  -*) echo "用法：./restore-drill.sh [備份資料夾 | 異地副本.tar.xz(.enc) | --install | --uninstall]" >&2; exit 64 ;;
+  -*) echo "用法：./restore-drill.sh [備份資料夾 | 異地副本.tar.xz(.enc)]" >&2; exit 64 ;;
 esac
 
 # Which backup: the argument, else the newest off-site copy (what a dead disk
 # would leave you with), else the newest local backup folder.
 #
-# Run by launchd, macOS (TCC) only lets this script list ~/Downloads or a
-# Google Drive folder once you allowed it; until then listing fails. Say so,
-# rather than quietly drilling an older backup from somewhere else.
+# Under a launchd job macOS (TCC) may refuse to list ~/Downloads or a Google
+# Drive folder. Say so, rather than quietly drilling an older backup from
+# somewhere else.
 offsite_dir=$(plist_env "$backup_plist" CUMORA_BACKUP_OFFSITE_DIR)
 local_dir=$(plist_env "$backup_plist" CUMORA_BACKUP_DIR)
 local_dir=${local_dir:-$HOME/.cumora/backups}
 check_readable() {
   [ ! -d "$1" ] || ls "$1" >/dev/null 2>&1 \
-    || fail "macOS 不讓這支腳本讀 $1（系統設定 → 隱私權與安全性 → 檔案與檔案夾，允許 restore-drill.sh 存取）"
+    || fail "macOS 不讓這個程序讀 $1（由每日備份順便跑，或從終端機跑 ./restore-drill.sh）"
 }
 newest_offsite() {
   [ -n "$offsite_dir" ] || return 0
@@ -134,7 +100,18 @@ mkdir -p "$HOME/.cumora"
 scratch=$(mktemp -d "$HOME/.cumora/drill-XXXXXX")
 chmod 700 "$scratch"
 dc() { (cd "$scratch" && COMPOSE_PROJECT_NAME=$project docker compose "$@"); }
-cleanup() { dc down -v >/dev/null 2>&1 || true; rm -rf "$scratch"; }
+# Any exit that did not go through fail() or the final record (set -e) still
+# has to show up as a failed drill, or doctor.sh would keep the last verdict.
+cleanup() {
+  rc=$?
+  dc down -v >/dev/null 2>&1 || true
+  rm -rf "$scratch"
+  if [ -z "$recorded" ]; then
+    echo "$(stamp) 還原演練意外中斷（結束碼 $rc）" >&2
+    record fail "意外中斷（結束碼 $rc），看 ~/.cumora/backup.log"
+    notify "Cumora 還原演練失敗" "意外中斷，詳情：~/.cumora/backup.log"
+  fi
+}
 trap cleanup EXIT
 cp docker-compose.yml backup.sh restore.sh offsite-crypto.sh "$scratch/"
 dc down -v >/dev/null 2>&1 || true   # leftovers of a drill that was killed
@@ -153,7 +130,8 @@ esac
 for f in db.sql.gz uploads.tar.gz env; do [ -f "$bk/$f" ] || fail "備份裡沒有 $f"; done
 
 # Bring the throwaway project up from the backup's env, then drop .env.
-(umask 077 && { cat "$bk/env"; echo "CUMORA_PORT=$port"; } > "$scratch/.env")
+(umask 077 && cat "$bk/env" > "$scratch/.env") || fail "讀不了 $bk/env（macOS 權限？）"
+echo "CUMORA_PORT=$port" >> "$scratch/.env"
 dc up -d --no-build >/dev/null 2>&1 || fail "拋棄式專案起不來（docker compose up）"
 rm "$scratch/.env"
 

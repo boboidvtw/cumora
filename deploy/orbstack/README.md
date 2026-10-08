@@ -193,13 +193,13 @@ CUMORA_BACKUP_OFFSITE_DIR="$HOME/Library/CloudStorage/GoogleDrive-<帳號>/我�
 ```bash
 ./restore-drill.sh                 # 演練最新的異地副本（沒設定異地副本就用最新的本機備份）
 ./restore-drill.sh <備份資料夾或 .tar.xz(.enc)>
-./restore-drill.sh --install       # 每月 1 日 04:30 自動演練（Mac 在睡眠的話，醒來後補跑）
-./restore-drill.sh --uninstall
 ```
 
-它模擬最壞的情況：手上只有備份、沒有 `.env`。先用備份裡的 env 把拋棄式專案開起來，刪掉 `.env`，再照你平常的方式跑 `./restore.sh`，然後確認：`.env` 一模一樣地回來了、每張表的筆數跟備份裡的 dump 相同、每個上傳檔案的 checksum 相同、伺服器回應 `/api/health` 而且有帳號。`realtime_outbox` 不比筆數：伺服器一開機就會清掉已經送出、超過保留時間的即時事件。結果寫在 `~/.cumora/restore-drill.last`，`./doctor.sh` 會顯示，並跳出 macOS 通知；日誌在 `~/.cumora/restore-drill.log`。
+不用另外排程：每日備份做完後，如果上次演練通過已經滿 30 天，就直接拿剛寫好的那份（有異地副本就用異地副本）演練一次；演練失敗的話，下一次備份會再試。改天數：`CUMORA_BACKUP_DRILL_DAYS=14 ./backup.sh --install`（跟其他設定一起帶），設 `0` 關閉。
 
-由 launchd 執行時，macOS 要先允許這支腳本讀 `~/Downloads` 和 Google Drive 資料夾（系統設定 → 隱私權與安全性 → 檔案與檔案夾）。還沒允許時演練會直接失敗並說明原因，不會改拿別處較舊的備份來演練。`check-upstream.sh` 也一樣：讀不到備份資料夾時會通知你，不會誤報「備份太久沒更新」。
+它模擬最壞的情況：手上只有備份、沒有 `.env`。先用備份裡的 env 把拋棄式專案開起來，刪掉 `.env`，再照你平常的方式跑 `./restore.sh`，然後確認：`.env` 一模一樣地回來了、每張表的筆數跟備份裡的 dump 相同、每個上傳檔案的 checksum 相同、伺服器回應 `/api/health` 而且有帳號。`realtime_outbox` 不比筆數：伺服器一開機就會清掉已經送出、超過保留時間的即時事件。結果寫在 `~/.cumora/restore-drill.last`，`./doctor.sh` 會顯示，並跳出 macOS 通知；自動跑的日誌在 `~/.cumora/backup.log`。
+
+為什麼不是獨立的排程：由 launchd 執行的工作，macOS 不讓它列出 `~/Downloads` 或 Google Drive 資料夾的內容，也不讓它讀別人建的檔案，只能讀自己寫的。每日備份讀得到自己剛寫的副本，所以演練由它順便跑。同理，`check-upstream.sh` 讀不到備份資料夾時，改看 `~/.cumora/backup.log` 最後一次「備份完成」的時間，不會誤報「備份太久沒更新」。
 
 資料存在 `cumora_pgdata`、`cumora_redisdata` 和 `cumora_uploads` 三個 Docker volume。`docker compose down` 不會刪資料；**`docker compose down -v` 會全部刪掉**。
 
