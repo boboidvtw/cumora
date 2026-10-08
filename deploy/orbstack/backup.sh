@@ -25,6 +25,10 @@
 #                        (default 30; 0 turns it off). A failed drill is
 #                        retried with the next backup.
 #
+#   CUMORA_LOG_MAX_MB    trim any ~/.cumora/*.log bigger than this to its
+#                        newest CUMORA_LOG_KEEP_LINES (20000) lines
+#                        (default 10; 0 turns it off)
+#
 # The off-site copy is written after the local backup is complete and is
 # checked by decrypting it again before it gets its final name. If it fails,
 # the local backup still counts; you get a notification instead.
@@ -61,6 +65,8 @@ offsite=${CUMORA_BACKUP_OFFSITE_DIR:-}
 offsite_keep=${CUMORA_BACKUP_OFFSITE_KEEP:-30}
 offsite_encrypt=${CUMORA_BACKUP_OFFSITE_ENCRYPT:-1}
 drill_days=${CUMORA_BACKUP_DRILL_DAYS:-30}
+log_max_mb=${CUMORA_LOG_MAX_MB:-10}
+log_keep_lines=${CUMORA_LOG_KEEP_LINES:-20000}
 . "$here/offsite-crypto.sh"
 log="$HOME/.cumora/backup.log"
 
@@ -150,6 +156,21 @@ case "$dest" in
     fi
     ;;
 esac
+
+# Nothing rotates the logs under ~/.cumora (launchd won't, and newsyslog needs
+# root); the daemon's grows ~300KB a day. Trim any over the limit to its newest
+# lines, in place: launchd opened them O_APPEND, so writers carry on at the new
+# end. Runs before the Docker checks so it happens even when those fail.
+trim_logs() {
+  [ "$log_max_mb" -gt 0 ] 2>/dev/null || return 0
+  for f in "$HOME"/.cumora/*.log; do
+    [ -f "$f" ] && [ "$(wc -c < "$f")" -gt $(( log_max_mb * 1024 * 1024 )) ] || continue
+    tail -n "$log_keep_lines" "$f" > "$f.trim" && cat "$f.trim" > "$f" \
+      && echo "$(stamp) 日誌太大，只留最後 $log_keep_lines 行：$f"
+    rm -f "$f.trim"
+  done
+}
+trim_logs
 
 docker info >/dev/null 2>&1 || fail "Docker 沒有回應（OrbStack 沒開？）"
 [ -n "$(docker compose ps -q postgres 2>/dev/null)" ] || fail "Cumora 的 postgres 沒在執行（先跑 ./up.sh）"
