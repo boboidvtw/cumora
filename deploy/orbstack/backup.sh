@@ -164,16 +164,48 @@ gzip -t "$tmp/db.sql.gz" && gzip -t "$tmp/uploads.tar.gz" || fail "壓縮檔驗�
 [ -s .env ] || fail ".env 不見了；先跑 ./restore.sh 從備份放回來"
 (umask 077 && cp .env "$tmp/env") || fail ".env 備份失敗"
 
+# Retention. Listing the folder is the truth, but under launchd macOS (TCC)
+# won't let this job list ~/Downloads or a Google Drive folder, nor delete
+# files there it didn't create; it may delete what it wrote itself. So when
+# listing is refused, this job keeps an index of what it wrote and prunes by
+# that. Backups made from Terminal are then neither counted nor deleted; the
+# next run from Terminal (which can list) cleans up everything.
+index=${CUMORA_BACKUP_INDEX:-$HOME/.cumora/backup-index}
+can_list() { ls "$1" >/dev/null 2>&1; }
+# No index yet: everything this job wrote so far is in its log.
+seed_index() {
+  [ -f "$index" ] || sed -n 's#.*完成：\(/.*\)（.*#\1#p' "$log" > "$index" 2>/dev/null || : > "$index"
+}
+# Backups directly in $1 (cumora-*) that the index knows and that still exist.
+indexed_in() {
+  seed_index
+  awk -v p="$1/cumora-" 'index($0, p) == 1 && index(substr($0, length(p) + 1), "/") == 0 && !seen[$0]++' "$index" \
+    | while IFS= read -r b; do [ -e "$b" ] && printf '%s\n' "$b"; done
+}
+remember() { can_list "$(dirname "$1")" || { seed_index; printf '%s\n' "$1" >> "$index"; }; }
+# Delete all but the newest $2 backups in $1. Names sort by time.
+prune() {
+  all=$(if can_list "$1"; then
+          for b in "$1"/cumora-*; do [ -e "$b" ] && printf '%s\n' "$b"; done
+        else
+          indexed_in "$1"
+        fi | awk -F/ '{ print $NF "\t" $0 }' | sort | cut -f2-)
+  count=$(printf '%s' "$all" | grep -c . || true)
+  [ "$count" -gt "$2" ] || return 0
+  printf '%s\n' "$all" | head -n $((count - $2)) | while IFS= read -r old; do
+    rm -rf "$old" 2>/dev/null || true
+    [ ! -e "$old" ] || echo "$(stamp) 警告：刪不掉舊備份 $old（從終端機跑一次 ./backup.sh 就會清掉）" >&2
+  done
+  # Forget what is gone, so the index stays as small as what is kept.
+  if [ -f "$index" ]; then
+    while IFS= read -r b; do [ -e "$b" ] && printf '%s\n' "$b"; done < "$index" > "$index.new" && mv "$index.new" "$index"
+  fi
+}
+
 mv "$tmp" "$dest/$name"
 trap - EXIT
-
-# Keep the newest $keep backups. Names sort by time, so drop from the front.
-count=$(ls -1d "$dest"/cumora-* 2>/dev/null | wc -l | tr -d ' ')
-if [ "$count" -gt "$keep" ]; then
-  ls -1d "$dest"/cumora-* | head -n $((count - keep)) | while read -r old; do
-    rm -rf "$old"
-  done
-fi
+remember "$dest/$name"
+prune "$dest" "$keep"
 
 size=$(du -sh "$dest/$name" | cut -f1)
 echo "$(stamp) 備份完成：$dest/$name（$size），保留最近 $keep 份"
@@ -214,14 +246,8 @@ else
 fi
 mv "$part" "$enc"
 trap - EXIT
-
-# Plain and encrypted copies share one retention count; names sort by time.
-copies() { ls -1 "$offsite"/cumora-*.tar.xz "$offsite"/cumora-*.tar.xz.enc 2>/dev/null; }
-count=$(copies | wc -l | tr -d ' ')
-if [ "$count" -gt "$offsite_keep" ]; then
-  copies | sed -E 's#.*/##' | sort | head -n $((count - offsite_keep)) | while read -r old; do
-    rm -f "$offsite/$old"
-  done
-fi
+# Plain and encrypted copies share one retention count.
+remember "$enc"
+prune "$offsite" "$offsite_keep"
 echo "$(stamp) 異地副本完成：$enc（$(du -h "$enc" | cut -f1)），保留最近 $offsite_keep 份"
 maybe_drill "$enc"

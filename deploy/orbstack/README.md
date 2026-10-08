@@ -153,7 +153,7 @@ docker compose start              # 再啟動
 每份備份是 `~/.cumora/backups/cumora-<日期時間>/` 底下的三個檔案：資料庫 `db.sql.gz`、上傳檔案 `uploads.tar.gz`，和 `.env` 的副本 `env`。預設保留最近 14 份，日誌在 `~/.cumora/backup.log`。備份失敗（例如 OrbStack 沒開）時會跳 macOS 通知，不會只默默寫進日誌。每日備份如果整個沒在跑（例如被取消、Mac 關機好幾天），每週一的上游檢查（見下方「同步上游更新」）會在最新備份超過 3 天時提醒你。Redis 不備份，裡面只有佇列和暫存狀態，伺服器會自己重建。
 
 - 換位置：`CUMORA_BACKUP_DIR=/Volumes/外接碟/cumora ./backup.sh --install`。預設位置和資料在同一顆硬碟上，防得了誤刪、防不了硬碟壞掉；放到外接碟或雲端同步資料夾比較保險。外接碟在備份時沒接上的話，那次會先備份到 `~/.cumora/backups`，並跳出通知，不會整天沒備份。
-- 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。
+- 改保留份數：`CUMORA_BACKUP_KEEP=30 ./backup.sh --install`。自動備份（launchd）列不出 `~/Downloads` 和 Google Drive 資料夾的內容（見下方「還原演練」），所以它把自己寫過的備份記在 `~/.cumora/backup-index`，照這份清單刪舊的；你從終端機手動做的備份它刪不掉，也不算在份數裡，下次從終端機跑 `./backup.sh` 時會一起清掉。
 - `env` 裡有密鑰（資料庫密碼、`AGENT_RUNTIME_SECRET`、GitHub OAuth secret），所以備份資料夾只有你自己能讀。不要把備份資料夾直接放進雲端同步資料夾，改用下面的加密異地副本。
 
 **加密異地副本（例如 Google Drive）**：本機備份做完後，再把它加密成一個 `cumora-<日期時間>.tar.xz.enc`，放進雲端同步資料夾，由 Google Drive for desktop 上傳。加密用 AES-256，密碼放在鑰匙圈（服務名稱 `cumora-backup`），不會寫進任何檔案；寫完會先解密驗證一次才改成正式檔名。異地這一步失敗時會跳通知，本機那份照樣算數。
