@@ -12,8 +12,9 @@ PATH="$HOME/.orbstack/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PAT
 export PATH
 
 broken=0
+warnings=0
 ok()   { printf '  ✓ %s\n' "$*"; }
-warn() { printf '  ! %s\n' "$*"; }
+warn() { printf '  ! %s\n' "$*"; warnings=$((warnings + 1)); }
 bad()  { printf '  ✗ %s\n' "$*"; broken=1; }
 section() { printf '\n%s\n' "$*"; }
 plist_env() { /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$2" "$1" 2>/dev/null || true; }
@@ -267,5 +268,7 @@ if command -v gh >/dev/null 2>&1 && [ -n "$remote" ]; then
 fi
 
 echo
-if [ "$broken" = 0 ]; then echo "沒有發現問題。"; else echo "有項目要處理（✗）。"; fi
+if [ "$broken" != 0 ]; then echo "有項目要處理（✗）。"
+elif [ "$warnings" != 0 ]; then echo "沒有壞掉的項目，有 $warnings 個提醒（!）值得看一下。"
+else echo "沒有發現問題。"; fi
 exit "$broken"
